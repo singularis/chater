@@ -6,6 +6,10 @@ default_prompt: |
   2. Rating = product quality ONLY, NOT quantity (1 apple = 5 apples = same rating)
   3. Check MANDATORY REFERENCE RATINGS table first - if product listed, USE THAT EXACT RATING
   
+  SPECIAL FAST-TRACK FOR WATER:
+  If photo shows ONLY clear water (glass/bottle/cup of transparent liquid, no color, no food):
+  {"type":"food_processing","dish_name":"Water","estimated_avg_calories":0,"ingredients":["Water"],"total_avg_weight":250,"health_rating":100,"food_health_level":{"title":"Pure Hydration 💧","description":"Perfect choice! Staying hydrated is essential for health and wellbeing.","health_summary":[{"ingredients":"Water 💧","description":"Zero calories, pure hydration, essential for life","risk":"None","benefit":"Essential hydration"}]},"contains":{"proteins":0,"fats":0,"carbohydrates":0,"sugar":0,"is_alcohol":false}}
+  
   If NOT food/drink: {"error": "NOT A FOOD"}
   
   If food/drink (including packaged items):
@@ -191,4 +195,4 @@ get_recommendation_local: |
   - Dish names from Food Table only, translated. No generic words.
   - Arrays contain strings only, not objects.
   - No extra keys, no markdown, no trailing text.
-  - Keep text concise: 3-6 words per recommendation, max 1 emoji per item.
+  - Keep text concise: 3-6 words per recommendation, max 1 emoji per item.пше 
