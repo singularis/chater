@@ -463,17 +463,27 @@ async def record_chess_game_endpoint(request: Request, user_email: str):
             logger.warning("/autocomplete/record_chess_game: empty body")
             raise HTTPException(status_code=400, detail="Request body required")
 
+        # Try JSON first, fallback to protobuf
         try:
-            chess_request = chess_game_pb2.RecordChessGameRequest()
-            chess_request.ParseFromString(body)
+            data = json.loads(body)
+            player_email = data.get("player_email", "").strip()
+            opponent_email = data.get("opponent_email", "").strip()
+            result = data.get("result", "").strip()
+            timestamp = int(data.get("timestamp", 0))
+            logger.debug(f"/autocomplete/record_chess_game: parsed JSON request")
         except:
-            logger.exception("/autocomplete/record_chess_game: failed to parse protobuf body")
-            raise HTTPException(status_code=400, detail="Invalid protobuf format")
-
-        player_email = chess_request.player_email.strip()
-        opponent_email = chess_request.opponent_email.strip()
-        result = chess_request.result.strip()
-        timestamp = int(chess_request.timestamp)
+            # Fallback to protobuf
+            try:
+                chess_request = chess_game_pb2.RecordChessGameRequest()
+                chess_request.ParseFromString(body)
+                player_email = chess_request.player_email.strip()
+                opponent_email = chess_request.opponent_email.strip()
+                result = chess_request.result.strip()
+                timestamp = int(chess_request.timestamp)
+                logger.debug(f"/autocomplete/record_chess_game: parsed protobuf request")
+            except:
+                logger.exception("/autocomplete/record_chess_game: failed to parse body")
+                raise HTTPException(status_code=400, detail="Invalid request format")
         
         logger.debug(f"/autocomplete/record_chess_game: parsed request - player={player_email}, opponent={opponent_email}, result={result}")
 
@@ -500,14 +510,17 @@ async def record_chess_game_endpoint(request: Request, user_email: str):
         player_stats = await get_chess_stats(player_email, opponent_email)
         opponent_stats = await get_chess_stats(opponent_email, player_email)
         
-        # Build response
-        response = chess_game_pb2.RecordChessGameResponse()
-        response.success = True
-        response.player_score = player_stats["score"] if player_stats else "0:0"
-        response.opponent_score = opponent_stats["score"] if opponent_stats else "0:0"
+        # Build JSON response
+        response_data = {
+            "success": True,
+            "player_wins": player_stats.get("wins", 0) if player_stats else 0,
+            "player_losses": player_stats.get("losses", 0) if player_stats else 0,
+            "opponent_wins": opponent_stats.get("wins", 0) if opponent_stats else 0,
+            "opponent_losses": opponent_stats.get("losses", 0) if opponent_stats else 0
+        }
         
-        logger.info(f"/autocomplete/record_chess_game: success - player_score={response.player_score}, opponent_score={response.opponent_score}")
-        return Response(content=response.SerializeToString(), media_type="application/x-protobuf")
+        logger.info(f"/autocomplete/record_chess_game: success - player={player_stats['score'] if player_stats else '0:0'}, opponent={opponent_stats['score'] if opponent_stats else '0:0'}")
+        return response_data
     
     except HTTPException:
         raise
@@ -526,35 +539,40 @@ async def get_chess_stats_endpoint(request: Request, user_email: str):
             logger.warning("/autocomplete/get_chess_stats: empty body")
             raise HTTPException(status_code=400, detail="Request body required")
 
+        # Try JSON first, fallback to protobuf
         try:
-            stats_request = chess_game_pb2.GetChessStatsRequest()
-            stats_request.ParseFromString(body)
+            data = json.loads(body)
+            request_email = data.get("user_email", "").strip()
+            opponent_email = data.get("opponent_email", "").strip() if "opponent_email" in data else None
+            logger.debug(f"/autocomplete/get_chess_stats: parsed JSON request")
         except:
-            logger.exception("/autocomplete/get_chess_stats: failed to parse protobuf body")
-            raise HTTPException(status_code=400, detail="Invalid protobuf format")
-
-        request_email = stats_request.user_email.strip()
+            # Fallback to protobuf
+            try:
+                stats_request = chess_game_pb2.GetChessStatsRequest()
+                stats_request.ParseFromString(body)
+                request_email = stats_request.user_email.strip()
+                opponent_email = stats_request.opponent_email.strip() if stats_request.opponent_email else None
+                logger.debug(f"/autocomplete/get_chess_stats: parsed protobuf request")
+            except:
+                logger.exception("/autocomplete/get_chess_stats: failed to parse body")
+                raise HTTPException(status_code=400, detail="Invalid request format")
         
         if request_email != user_email:
             logger.warning(f"/autocomplete/get_chess_stats: request_email != token user ({request_email} != {user_email})")
             raise HTTPException(status_code=403, detail="Cannot get stats for another user")
 
-        # Get stats (last opponent)
-        stats = await get_chess_stats(user_email)
+        # Get stats
+        stats = await get_chess_stats(user_email, opponent_email)
         
-        # Build response
-        response = chess_game_pb2.GetChessStatsResponse()
-        if stats:
-            response.score = stats["score"]
-            response.opponent_name = stats["opponent_name"]
-            response.last_game_date = stats["last_game_date"]
-        else:
-            response.score = "0:0"
-            response.opponent_name = ""
-            response.last_game_date = ""
+        # Build JSON response
+        response_data = {
+            "score": stats["score"] if stats else "0:0",
+            "opponent_name": stats["opponent_name"] if stats else "",
+            "last_game_date": stats["last_game_date"] if stats else ""
+        }
         
-        logger.info(f"/autocomplete/get_chess_stats: success - score={response.score}")
-        return Response(content=response.SerializeToString(), media_type="application/x-protobuf")
+        logger.info(f"/autocomplete/get_chess_stats: success - score={response_data['score']}")
+        return response_data
     
     except HTTPException:
         raise
