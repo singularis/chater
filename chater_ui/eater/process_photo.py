@@ -111,6 +111,71 @@ def eater_get_photo(user_email, local_model_service):
 
         message_id = str(uuid.uuid4())
         photo_base64 = base64.b64encode(resized_photo_data).decode("utf-8")
+        
+        # Fast-track water detection BEFORE AI to avoid 504 timeout
+        if type_of_processing == "default_prompt":
+            try:
+                from PIL import Image
+                import io
+                import numpy as np
+                
+                # Quick pixel analysis
+                image = Image.open(io.BytesIO(resized_photo_data)).convert('RGB')
+                pixels = np.array(image)
+                
+                # Check if image is mostly transparent/light colored (potential water)
+                # Water photos typically have high brightness and low color variance
+                brightness = pixels.mean()
+                color_std = pixels.std()
+                
+                logger.info(f"Quick water check for {user_email}: brightness={brightness:.1f}, std={color_std:.1f}")
+                
+                # If very bright (>180) and low variance (<40), likely water
+                if brightness > 180 and color_std < 40:
+                    logger.info(f"✅ Fast-track water detected for {user_email} - skipping AI")
+                    water_response = {
+                        "type": "food_processing",
+                        "dish_name": "Water",
+                        "estimated_avg_calories": 0,
+                        "ingredients": ["Water"],
+                        "total_avg_weight": 250,
+                        "health_rating": 100,
+                        "food_health_level": {
+                            "title": "Pure Hydration 💧",
+                            "description": "Perfect choice! Staying hydrated is essential for health and wellbeing.",
+                            "health_summary": [{
+                                "ingredients": "Water 💧",
+                                "description": "Zero calories, pure hydration, essential for life",
+                                "risk": "None",
+                                "benefit": "Essential hydration"
+                            }]
+                        },
+                        "contains": {
+                            "proteins": 0,
+                            "fats": 0,
+                            "carbohydrates": 0,
+                            "sugar": 0,
+                            "is_alcohol": False
+                        }
+                    }
+                    
+                    # Upload to MinIO in background
+                    threading.Thread(
+                        target=_upload_to_minio_background,
+                        args=(
+                            current_app.config.get("MINIO_CLIENT"),
+                            os.getenv("MINIO_BUCKET_EATER", "eater"),
+                            object_name,
+                            resized_photo_data,
+                            user_email,
+                        ),
+                        daemon=True,
+                    ).start()
+                    
+                    return jsonify(water_response)
+            except Exception as e:
+                logger.warning(f"Fast water check failed for {user_email}: {e} - continuing with AI")
+        
         try:
             _dispatch_photo_message(
                 photo_base64,
