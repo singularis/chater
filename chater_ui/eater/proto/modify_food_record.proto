@@ -11,6 +11,7 @@ message ModifyFoodRecordRequest {
   string manual_insight = 6;
   repeated string manual_components = 7;
   string image_id = 8;  // for try-again: MinIO path to re-trigger analysis
+  float added_sugar_tsp = 9;  // Added sugar in teaspoons (1 tsp = ~5g, ~20 cal)
 }
 
 message ModifyFoodRecordResponse {

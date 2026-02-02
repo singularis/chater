@@ -381,6 +381,7 @@ def json_to_plain_text(json_data):
         "age_based_health_advice": "Health Advice",
         "recommended_dish": "Try This Dish",
         "coffee_warning": "Coffee Warning",
+        "weekly_sugar_summary": "Weekly Sugar Intake",
     }
 
     section_headers = {
@@ -450,6 +451,11 @@ def json_to_plain_text(json_data):
     if coffee_warning and isinstance(coffee_warning, str) and coffee_warning.strip():
         output_text += f"☕ {section_headers['coffee_warning']}:\n{coffee_warning}\n\n"
 
+    # Add weekly sugar summary if present
+    weekly_sugar = json_data.get("weekly_sugar_summary")
+    if weekly_sugar and isinstance(weekly_sugar, str) and weekly_sugar.strip():
+        output_text += f"🍬 {section_headers['weekly_sugar_summary']}:\n{weekly_sugar}\n\n"
+
     excluded_fields = {
         "general_recommendations",
         "healthier_foods",
@@ -458,6 +464,7 @@ def json_to_plain_text(json_data):
         "age_based_health_advice",
         "recommended_dish",
         "coffee_warning",
+        "weekly_sugar_summary",
         "foods_to_reduce_title_color",
         "healthier_foods_title_color",
     }

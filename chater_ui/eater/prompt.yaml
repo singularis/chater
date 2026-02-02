@@ -1,15 +1,28 @@
 default_prompt: |
   Analyze photo. Return ONLY valid JSON, no text/comments/fences. Keys in exact order shown. Numbers as integers without units.
   
+  CRITICAL RULES:
+  1. Use SINGULAR form for ALL dish names (Apple not Apples, Date not Dates, Fry not Fries)
+  2. Rating = product quality ONLY, NOT quantity (1 apple = 5 apples = same rating)
+  3. Check MANDATORY REFERENCE RATINGS table first - if product listed, USE THAT EXACT RATING
+  
   If NOT food/drink: {"error": "NOT A FOOD"}
   
   If food/drink (including packaged items):
   {"type":"food_processing","dish_name":"<name>","estimated_avg_calories":<int>,"ingredients":["<item>"],"total_avg_weight":<int>,"health_rating":<int>,"food_health_level":{"title":"<4 words max + emoji>","description":"<20 words max>","health_summary":[{"ingredients":"<name + emoji>","description":"<10 words max>","risk":"<5 words, if harmful>","benefit":"<5 words, if healthy>"}]},"contains":{"proteins":<int>,"fats":<int>,"carbohydrates":<int>,"sugar":<int>,"is_alcohol":<bool>}}
   
   Rules:
+  - FOOD NAME NORMALIZATION (CRITICAL - APPLY FIRST):
+    * ALWAYS use SINGULAR form: "Date" never "Dates", "Mandarin Orange" never "Mandarins", "Walnut" never "Walnuts"
+    * ALWAYS use consistent naming: "Mandarin Orange" for both small/large mandarins
+    * First letter capitalized, rest lowercase unless proper noun
   - Worst-case nutrition: assume full-fat versions if unclear, all visible oil absorbed, all sauces consumed. Use realistic USDA FoodData Central or NCCDB style values.
   - Weight estimation priority: 1) visible labels, 2) reference objects (plate 28cm, fork 19cm, hand 9cm), 3) culinary standards.
-  - health_rating: INTEGER 0-100. Calculate by summing points below (max 100) and applying deductions where relevant.
+  - health_rating: INTEGER 0-100. 
+    ABSOLUTE RULE: RATING = FOOD QUALITY, NOT QUANTITY. 1 apple = 5 apples = 1kg apples = SAME RATING.
+    1 Snickers bar = 2 Snickers bars = SAME RATING. 5 fries = 1kg fries = SAME RATING.
+    STEP 1: Check MANDATORY REFERENCE RATINGS table below. If food matches (ignore singular/plural, case), USE THAT EXACT RATING. 
+    STEP 2: Only if food NOT in reference table, calculate by summing points below.
     * Whole unprocessed: 0..25 (deduct up to 25 if ultra processed or packaged snack).
     * Fresh ripe raw not thermally processed: 0..20 (deduct up to 20 if cooked fried baked).
     * No added spices sauces salt sugar additives preservatives: 0..15 (deduct up to 15 if present or likely).
@@ -20,6 +33,37 @@ default_prompt: |
     * Not deep fried not ultra processed no hydrogenated fats: 0..10 (deduct up to 10 if deep fried ultra processed).
     Example: ripe fresh raw fruit with no additives should be near 100. Chips should be very low.
     HIGH RATING FOODS (95-100): Pure water, fresh berries (blueberries, strawberries, raspberries, blackberries), fresh vegetables (broccoli, spinach, kale, asparagus, bell peppers, tomatoes, carrots, cauliflower, Brussels sprouts), fresh fruits (apples, avocados, oranges, grapes, kiwi, lemons, mangoes), raw nuts and seeds (almonds, walnuts, chia seeds, macadamia), fresh fish (salmon, sardines, trout, tuna), fresh lean meats (chicken breast, lean beef, lamb), eggs, legumes (lentils, beans), whole grains (brown rice, oats, quinoa), olive oil, garlic, onions.
+    MANDATORY REFERENCE RATINGS (USE EXACTLY THESE VALUES - NO VARIATION ALLOWED):
+    BEFORE CALCULATING: CHECK IF FOOD IS IN THIS LIST. IF YES, USE THIS EXACT RATING.
+    Fruits (Fresh):
+    * Water/Pure Water: 100
+    * Spinach: 100
+    * Blueberry/Raspberry: 99
+    * Strawberry/Avocado: 98
+    * Apple/Orange/Mandarin Orange/Lime/Lemon: 97
+    * Carrot/Kiwi: 96
+    * Pear/Salmon: 95
+    * Peach: 94
+    * Plum: 93
+    * Grape/Egg: 92
+    * Mango: 92
+    * Banana/Almond: 90
+    * Walnut/Oatmeal: 88
+    * Date: 78 (dried, high sugar)
+    Vegetables & Proteins:
+    * Broccoli: 99
+    * Tomato: 98
+    * Chicken Breast (grilled): 85
+    * Potato (boiled): 75
+    Processed Foods (always low):
+    * French Fries: 25 (deep fried, high fat)
+    * Chips/Crisps: 18 (ultra processed)
+    * Snickers Bar: 22 (high sugar, processed)
+    * Coca Cola: 15 (pure sugar drink)
+    * Pizza (takeaway): 35 (processed, high fat)
+    * White Bread: 45 (refined carbs)
+    * Brown Rice: 80
+    * Whole Grain Bread: 72
   - health_summary: each item must be EITHER a risk OR a benefit, not both. SORTING: Always list benefits FIRST, then risks. Order: all items with impact="Benefit" at the top, followed by all items with impact="Risk" at the bottom.
   - Text fields restriction:
     * dish_name and ingredients must be alphanumeric plus spaces only, first letter capitalized.
@@ -28,6 +72,14 @@ default_prompt: |
   - is_alcohol: true for alcoholic drinks.
   - WATER: Pure water (tap, bottled, mineral) always gets health_rating: 100. Zero calories, zero macros except sodium if mineral water. Essential for hydration. 💧
   - COFFEE: Track coffee consumption. If consumed 2+ times daily, flag for warning in recommendations.
+  - CONSISTENCY RULE (ABSOLUTE - NO EXCEPTIONS):
+    * ONE PRODUCT = ONE RATING, regardless of quantity, weight, or word form
+    * Examples: Apple/Apples, 1 apple/5 apples, Date/Dates, Snickers/2 Snickers, French Fries 50g/1kg → SAME RATING
+    * Rating depends ONLY on: freshness, processing level, additives. NOT on portion size.
+    * Always use SINGULAR form in dish_name: "Apple" not "Apples", "Date" not "Dates"
+    * Process: 1) Identify product 2) Normalize to singular 3) Check reference table 4) Use exact rating
+    * Reference table ratings are MANDATORY - do not recalculate, just copy the value.
+  - TEA/COFFEE SUGAR RULE: Plain tea or coffee contains ZERO sugar unless packaging shows added sweeteners (Lipton Iced Tea, Arizona Tea, Starbucks bottled drinks). Black tea, green tea, coffee beans have 0g sugar. Only add sugar if visible evidence on label or if user explicitly added sugar/milk to drink.
 
   If food or drink (including packaged items) return:
   {"type":"food_processing",
@@ -86,7 +138,8 @@ get_recommendation: |
     "recommended_dish": {"cuisine": "<cuisine name>", "dish": "<specific dish name translated>", "description": "<3-5 words>"} OR empty object {},
     "age_based_health_advice": "<targeted advice based on user age, 8-12 words, 1 emoji>",
     "coffee_warning": "<if >=3 coffees/day: max 10 words, 1 emoji, else empty string>",
-    "translation_keys": {"foods_to_reduce_or_avoid": "<translated>", "healthier_foods": "<translated>", "general_recommendations": "<translated>", "favorite_dish": "<translated>", "recommended_dish": "<translated>", "age_based_health_advice": "<translated>", "coffee_warning": "<translated>"}
+    "weekly_sugar_summary": "<total added sugar in grams (teaspoons), warning if >175g/week, else congratulations, 10-15 words, 1 emoji>",
+    "translation_keys": {"foods_to_reduce_or_avoid": "<translated>", "healthier_foods": "<translated>", "general_recommendations": "<translated>", "favorite_dish": "<translated>", "recommended_dish": "<translated>", "age_based_health_advice": "<translated>", "coffee_warning": "<translated>", "weekly_sugar_summary": "<translated>"}
   }
   
   CRITICAL: Keys must stay in English. NEVER translate keys. Translate ONLY values to respond_in_language.
@@ -108,6 +161,16 @@ get_recommendation: |
     * Limit alcohol and prioritize hydration throughout day 💧
     * Focus on whole foods and reduce ultra-processed items 🥗
   - Use varied advice each time, not always the same tip
+  - WEEKLY SUGAR SUMMARY: Calculate total FREE SUGARS from last 7 days (WHO definition):
+    * Include: manually added sugar (added_sugar_tsp × 5g) + sugar from processed foods (candy, sodas, juice, desserts) + sugar from packaged items
+    * Exclude: natural sugar from fresh fruits, vegetables, plain milk
+    * Format: "Xg (Y tsp) free sugars this week" where Y = X/5 rounded to 1 decimal
+    * ALWAYS show if >0g
+    * If >175g (WHO limit 25g/day × 7): "⚠️ Exceeds WHO recommendation"
+    * If 100-175g: "Moderate, try to reduce 🍬"
+    * If <100g: "Good control! 👍"
+    * Max 15 words total
+    * Data source: WHO guidelines on free sugars (https://www.who.int/news-room/fact-sheets/detail/healthy-diet)
 
 respond_in_language: |
   Target language from "respond_in_language" (ISO 639-1). Default: en.
