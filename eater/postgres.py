@@ -57,6 +57,7 @@ class DishesDay(Base):
     contains = Column(JSON)
     user_email = Column(String, nullable=False)
     image_id = Column(String)
+    added_sugar_tsp = Column(Float, default=0.0)
 
 
 class TotalForDay(Base):
@@ -277,6 +278,16 @@ def write_to_dish_day(
             for entry in all_contains:
                 for key in aggregated_contains:
                     aggregated_contains[key] += entry.get(key, 0)
+            
+            # Add sugar from added_sugar_tsp (1 tsp = ~5g)
+            total_added_sugar_result = (
+                session.query(func.sum(DishesDay.added_sugar_tsp))
+                .filter(DishesDay.date == recalc_date)
+                .filter(DishesDay.user_email == user_email)
+                .scalar()
+            )
+            total_added_sugar_tsp = total_added_sugar_result or 0
+            aggregated_contains["sugar"] += float(total_added_sugar_tsp) * 5  # Convert tsp to grams
 
             # Prepare data for total_for_day table
             total_for_day = TotalForDay(
@@ -415,6 +426,7 @@ def get_today_dishes(user_email: str = None):
                     "health_rating": _health_rating_for_output(dish.health_rating),
                     "ingredients": dish.ingredients,
                     "image_id": dish.image_id,
+                    "added_sugar_tsp": getattr(dish, 'added_sugar_tsp', 0.0) or 0.0,
                 }
                 for dish in dishes_today
             ]
@@ -499,6 +511,7 @@ def get_custom_date_dishes(custom_date: str, user_email: str = None):
                     "ingredients": dish.ingredients,
                     "food_health_level": dish.food_health_level,
                     "image_id": dish.image_id,
+                    "added_sugar_tsp": getattr(dish, 'added_sugar_tsp', 0.0) or 0.0,
                 }
                 for dish in dishes_today
             ]
@@ -609,6 +622,12 @@ def modify_food(data, user_email: str = None):
                 time_value = data.get("time")
                 user_email = data.get("user_email", user_email)
                 percentage = data.get("percentage", 100)
+                added_sugar_tsp = data.get("added_sugar_tsp", 0.0)
+                is_try_again = data.get("is_try_again", False)
+                image_id = data.get("image_id", "")
+                manual_food_name = data.get("manual_food_name", "")
+                manual_insight = data.get("manual_insight", "")
+                manual_components = data.get("manual_components", [])
             else:
                 logger.error(f"Invalid data format for modify_food: {data}")
                 return
@@ -622,32 +641,87 @@ def modify_food(data, user_email: str = None):
             )
 
             if food_record:
-                # Calculate the modification factor (percentage / 100)
-                factor = percentage / 100.0
+                modified = False
+                
+                # Handle "Add Sugar" functionality
+                if added_sugar_tsp > 0:
+                    logger.info(f"Adding {added_sugar_tsp} tsp sugar to food at time={time_value}")
+                    
+                    # 1 tsp sugar = ~5g = ~20 kcal
+                    sugar_calories = int(added_sugar_tsp * 20)
+                    sugar_weight = int(added_sugar_tsp * 5)
+                    
+                    # Add to existing values
+                    current_sugar = getattr(food_record, 'added_sugar_tsp', 0) or 0
+                    food_record.added_sugar_tsp = current_sugar + added_sugar_tsp
+                    food_record.estimated_avg_calories += sugar_calories
+                    food_record.total_avg_weight += sugar_weight
+                    
+                    # Add "Sugar" to ingredients if not present
+                    if food_record.ingredients and "Sugar" not in food_record.ingredients:
+                        food_record.ingredients = list(food_record.ingredients) + ["Sugar"]
+                    
+                    # Update contains field for sugar
+                    if food_record.contains:
+                        if "sugars" in food_record.contains:
+                            food_record.contains["sugars"] += sugar_weight
+                        else:
+                            food_record.contains["sugars"] = sugar_weight
+                    
+                    modified = True
+                    logger.info(f"Sugar added: +{sugar_calories} kcal, +{sugar_weight}g")
+                
+                # Handle "Try Again" flag (store for later processing)
+                if is_try_again and image_id:
+                    logger.info(f"Try Again requested for time={time_value}, image_id={image_id}")
+                    # TODO: Implement photo re-analysis logic
+                    # For now, just log it - proper implementation needs Kafka message to vision AI
+                    modified = True
+                
+                # Handle manual customization
+                if manual_food_name:
+                    food_record.dish_name = manual_food_name
+                    modified = True
+                    logger.info(f"Manual food name updated to: {manual_food_name}")
+                
+                if manual_components:
+                    food_record.ingredients = manual_components
+                    modified = True
+                    logger.info(f"Manual ingredients updated: {manual_components}")
+                
+                # Handle percentage modification (original functionality)
+                if percentage != 100:
+                    factor = percentage / 100.0
+                    
+                    # Update the food record with the new percentage
+                    food_record.estimated_avg_calories = int(
+                        food_record.estimated_avg_calories * factor
+                    )
+                    food_record.total_avg_weight = int(
+                        food_record.total_avg_weight * factor
+                    )
+                    
+                    # Update nutritional values in the contains field
+                    if food_record.contains:
+                        for key in food_record.contains:
+                            if isinstance(food_record.contains[key], (int, float)):
+                                food_record.contains[key] = (
+                                    food_record.contains[key] * factor
+                                )
+                    
+                    modified = True
+                    logger.debug(f"Portion adjusted by {percentage}%")
 
-                # Update the food record with the new percentage
-                food_record.estimated_avg_calories = int(
-                    food_record.estimated_avg_calories * factor
-                )
-                food_record.total_avg_weight = int(
-                    food_record.total_avg_weight * factor
-                )
-
-                # Update nutritional values in the contains field
-                if food_record.contains:
-                    for key in food_record.contains:
-                        if isinstance(food_record.contains[key], (int, float)):
-                            food_record.contains[key] = (
-                                food_record.contains[key] * factor
-                            )
-
-                session.commit()
-                logger.debug(
-                    f"Successfully modified food record with time {time_value} for user {user_email} by {percentage}%"
-                )
-
-                # Recalculate the totals for the day after modification
-                write_to_dish_day(recalculate=True, user_email=user_email)
+                if modified:
+                    session.commit()
+                    logger.debug(
+                        f"Successfully modified food record with time {time_value} for user {user_email}"
+                    )
+                    
+                    # Recalculate the totals for the day after modification
+                    write_to_dish_day(recalculate=True, user_email=user_email)
+                else:
+                    logger.debug(f"No modifications applied for time {time_value}")
             else:
                 logger.debug(
                     f"No food record found with time {time_value} for user {user_email}"

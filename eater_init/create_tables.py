@@ -399,6 +399,9 @@ def create_tables():
                             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'dishes_day' AND column_name = 'image_id') THEN
                                 ALTER TABLE public.dishes_day ADD COLUMN image_id VARCHAR;
                             END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'dishes_day' AND column_name = 'added_sugar_tsp') THEN
+                                ALTER TABLE public.dishes_day ADD COLUMN added_sugar_tsp REAL DEFAULT 0.0;
+                            END IF;
                         END IF;
 
                         -- Check and add columns to total_for_day table
