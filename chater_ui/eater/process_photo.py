@@ -119,20 +119,53 @@ def eater_get_photo(user_email, local_model_service):
                 import io
                 import numpy as np
                 
-                # Quick pixel analysis
+                # Quick pixel analysis for water bottles/glasses
                 image = Image.open(io.BytesIO(resized_photo_data)).convert('RGB')
                 pixels = np.array(image)
+                h, w = pixels.shape[:2]
                 
-                # Check if image is mostly transparent/light colored (potential water)
-                # Water photos typically have high brightness and low color variance
-                brightness = pixels.mean()
-                color_std = pixels.std()
+                # Check MULTIPLE REGIONS for transparent water (not just whole image)
+                # This handles bottles with labels - we look for transparent areas
+                regions_to_check = [
+                    pixels[h//4:3*h//4, w//4:3*w//4],  # Center
+                    pixels[h//3:2*h//3, w//3:2*w//3],  # Middle center
+                    pixels[:h//2, :],                   # Top half
+                    pixels[h//4:, :],                   # Bottom 3/4
+                ]
                 
-                logger.info(f"Quick water check for {user_email}: brightness={brightness:.1f}, std={color_std:.1f}")
+                water_indicators = 0
+                for i, region in enumerate(regions_to_check):
+                    if region.size == 0:
+                        continue
+                        
+                    brightness = region.mean()
+                    color_std = region.std()
+                    
+                    # Calculate RGB channel similarity (water is usually balanced)
+                    r_mean = region[:,:,0].mean()
+                    g_mean = region[:,:,1].mean()
+                    b_mean = region[:,:,2].mean()
+                    rgb_diff = max(r_mean, g_mean, b_mean) - min(r_mean, g_mean, b_mean)
+                    
+                    # Water criteria per region:
+                    # - Brightness 160-250 (light but not pure white)
+                    # - Low color variance (<50)
+                    # - Balanced RGB (<30 diff)
+                    is_water_like = (
+                        160 < brightness < 250 and 
+                        color_std < 50 and 
+                        rgb_diff < 30
+                    )
+                    
+                    if is_water_like:
+                        water_indicators += 1
+                        logger.info(f"Region {i}: WATER-like (b={brightness:.1f}, std={color_std:.1f}, rgb_diff={rgb_diff:.1f})")
                 
-                # If very bright (>180) and low variance (<40), likely water
-                if brightness > 180 and color_std < 40:
-                    logger.info(f"✅ Fast-track water detected for {user_email} - skipping AI")
+                logger.info(f"Quick water check for {user_email}: {water_indicators}/4 regions water-like")
+                
+                # If 2+ regions look like water → it's water!
+                if water_indicators >= 2:
+                    logger.info(f"✅ Fast-track water detected for {user_email} ({water_indicators}/4 regions) - skipping AI")
                     water_response = {
                         "type": "food_processing",
                         "dish_name": "Water",
@@ -173,6 +206,8 @@ def eater_get_photo(user_email, local_model_service):
                     ).start()
                     
                     return jsonify(water_response)
+                else:
+                    logger.info(f"Not water (only {water_indicators}/4 regions) - sending to AI")
             except Exception as e:
                 logger.warning(f"Fast water check failed for {user_email}: {e} - continuing with AI")
         
