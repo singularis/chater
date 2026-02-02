@@ -35,6 +35,13 @@ def current_date():
     return datetime.now().date()
 
 
+def _health_rating_for_output(value):
+    """Return health_rating 0-100 for API; -1 if missing."""
+    if value is None:
+        return -1
+    return max(0, min(100, int(value)))
+
+
 class DishesDay(Base):
     __tablename__ = "dishes_day"
     __table_args__ = {"schema": "public"}
@@ -126,7 +133,8 @@ def write_to_dish_day(
                 estimated_avg_calories = message.get("estimated_avg_calories")
                 ingredients = message.get("ingredients")
                 total_avg_weight = message.get("total_avg_weight")
-                health_rating = message.get("health_rating", 0)
+                raw_rating = message.get("health_rating", 0)
+                health_rating = max(0, min(100, int(raw_rating))) if isinstance(raw_rating, (int, float)) else 0
                 food_health_level_data = message.get("food_health_level")
                 food_health_level_str = None
                 if food_health_level_data:
@@ -404,9 +412,7 @@ def get_today_dishes(user_email: str = None):
                     "dish_name": dish.dish_name,
                     "estimated_avg_calories": dish.estimated_avg_calories,
                     "total_avg_weight": dish.total_avg_weight,
-                    "health_rating": (
-                        dish.health_rating if dish.health_rating is not None else -1
-                    ),
+                    "health_rating": _health_rating_for_output(dish.health_rating),
                     "ingredients": dish.ingredients,
                     "image_id": dish.image_id,
                 }
@@ -489,9 +495,7 @@ def get_custom_date_dishes(custom_date: str, user_email: str = None):
                     "dish_name": dish.dish_name,
                     "estimated_avg_calories": dish.estimated_avg_calories,
                     "total_avg_weight": dish.total_avg_weight,
-                    "health_rating": (
-                        dish.health_rating if dish.health_rating is not None else -1
-                    ),
+                    "health_rating": _health_rating_for_output(dish.health_rating),
                     "ingredients": dish.ingredients,
                     "food_health_level": dish.food_health_level,
                     "image_id": dish.image_id,
@@ -689,9 +693,7 @@ def get_dishes(days, user_email: str = None):
                     "dish_name": dish.dish_name,
                     "estimated_avg_calories": dish.estimated_avg_calories,
                     "total_avg_weight": dish.total_avg_weight,
-                    "health_rating": (
-                        dish.health_rating if dish.health_rating is not None else -1
-                    ),
+                    "health_rating": _health_rating_for_output(dish.health_rating),
                     "ingredients": dish.ingredients,
                     "contains": dish.contains,
                 }
