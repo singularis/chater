@@ -510,6 +510,18 @@ async def record_chess_game_endpoint(request: Request, user_email: str):
         player_stats = await get_chess_stats(player_email, opponent_email)
         opponent_stats = await get_chess_stats(opponent_email, player_email)
         
+        # Send WebSocket notification to opponent if they're online
+        if opponent_email in manager.user_connections:
+            opponent_ws = manager.user_connections[opponent_email]
+            notification = {
+                "type": "chess_game_update",
+                "player_email": player_email,
+                "result": result,
+                "score": opponent_stats["score"] if opponent_stats else "0:0"
+            }
+            await safe_send_websocket_message(opponent_ws, notification)
+            logger.info(f"/autocomplete/record_chess_game: sent WebSocket notification to {opponent_email}")
+        
         # Build JSON response
         response_data = {
             "success": True,
@@ -578,6 +590,53 @@ async def get_chess_stats_endpoint(request: Request, user_email: str):
         raise
     except Exception:
         logger.exception("/autocomplete/get_chess_stats: unexpected error")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/autocomplete/get_all_chess_data")
+@token_required
+async def get_all_chess_data_endpoint(request: Request, user_email: str):
+    """Get all chess data: total wins and scores with all opponents"""
+    try:
+        logger.debug(f"/autocomplete/get_all_chess_data: start for user={user_email}")
+        
+        # Get total wins
+        query_total = """
+        SELECT COUNT(*) FILTER (WHERE result = 'win') as total_wins
+        FROM chess_games
+        WHERE player_email = :user_email
+        """
+        total_row = await database.fetch_one(query_total, values={"user_email": user_email})
+        total_wins = total_row["total_wins"] if total_row else 0
+        
+        # Get scores with all opponents
+        query_opponents = """
+        SELECT 
+            opponent_email,
+            COUNT(*) FILTER (WHERE result = 'win') as wins,
+            COUNT(*) FILTER (WHERE result = 'loss') as losses
+        FROM chess_games
+        WHERE player_email = :user_email
+        GROUP BY opponent_email
+        """
+        opponent_rows = await database.fetch_all(query_opponents, values={"user_email": user_email})
+        
+        opponents = {}
+        for row in opponent_rows:
+            opponents[row["opponent_email"]] = f"{row['wins']}:{row['losses']}"
+        
+        response_data = {
+            "total_wins": total_wins,
+            "opponents": opponents
+        }
+        
+        logger.info(f"/autocomplete/get_all_chess_data: success - total_wins={total_wins}, opponents={len(opponents)}")
+        return response_data
+    
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("/autocomplete/get_all_chess_data: unexpected error")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
