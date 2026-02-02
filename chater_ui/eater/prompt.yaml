@@ -19,12 +19,15 @@ default_prompt: |
     * Single or simple ingredient: 0..10 (deduct up to 10 if complex processed dish).
     * Not deep fried not ultra processed no hydrogenated fats: 0..10 (deduct up to 10 if deep fried ultra processed).
     Example: ripe fresh raw fruit with no additives should be near 100. Chips should be very low.
-  - health_summary: each item must be EITHER a risk OR a benefit, not both.
+    HIGH RATING FOODS (95-100): Pure water, fresh berries (blueberries, strawberries, raspberries, blackberries), fresh vegetables (broccoli, spinach, kale, asparagus, bell peppers, tomatoes, carrots, cauliflower, Brussels sprouts), fresh fruits (apples, avocados, oranges, grapes, kiwi, lemons, mangoes), raw nuts and seeds (almonds, walnuts, chia seeds, macadamia), fresh fish (salmon, sardines, trout, tuna), fresh lean meats (chicken breast, lean beef, lamb), eggs, legumes (lentils, beans), whole grains (brown rice, oats, quinoa), olive oil, garlic, onions.
+  - health_summary: each item must be EITHER a risk OR a benefit, not both. SORTING: Always list benefits FIRST, then risks. Order: all items with impact="Benefit" at the top, followed by all items with impact="Risk" at the bottom.
   - Text fields restriction:
     * dish_name and ingredients must be alphanumeric plus spaces only, first letter capitalized.
     * food_health_level title and health_summary ingredient may include emojis.
     * descriptions must be max length as specified.
   - is_alcohol: true for alcoholic drinks.
+  - WATER: Pure water (tap, bottled, mineral) always gets health_rating: 100. Zero calories, zero macros except sodium if mineral water. Essential for hydration. 💧
+  - COFFEE: Track coffee consumption. If consumed 2+ times daily, flag for warning in recommendations.
 
   If food or drink (including packaged items) return:
   {"type":"food_processing",
@@ -39,7 +42,11 @@ default_prompt: |
      "health_summary":[
        {"ingredient":"<Name + emoji>",
         "description":"<Max 10 words>",
-        "impact":"<Risk or Benefit>",
+        "impact":"Benefit",
+        "impact_text":"<Max 5 words + emoji optional>"},
+       {"ingredient":"<Name + emoji>",
+        "description":"<Max 10 words>",
+        "impact":"Risk",
         "impact_text":"<Max 5 words + emoji optional>"}
      ]
    },
@@ -59,6 +66,7 @@ default_prompt: |
   - Use worst-case assumptions for oils sauces dressings and toppings.
   - Make dish_name and ingredients simple and recognizable.
   - If unsure about an ingredient, include it with lower confidence in description text, not extra JSON keys.
+  - CRITICAL SORTING: In health_summary array, ALWAYS put all Benefit items first, followed by all Risk items. Never mix them.
 
 weight_prompt: |
   Extract weight from scale OCR text. JSON only, no extra text.
@@ -67,27 +75,39 @@ weight_prompt: |
   - Output: {"type":"weight_processing","weight":<number>} or {"error":"INVALID_WEIGHT"}
 
 get_recommendation: |
-  JSON only. You're a friendly nutrition buddy! 😊 Analyze food history with warmth and encouragement. Return exactly this structure:
+  JSON only. Analyze food history and provide concise recommendations. Return exactly this structure:
   {
-    "foods_to_reduce_or_avoid": [{"dish_name": "<translated>", "reason": "<friendly, encouraging reason with emoji>"}],
-    "healthier_foods": [{"dish_name": "<translated>", "reason": "<positive, motivating reason with emoji>"}],
-    "general_recommendations": {"<key>": "<warm, supportive advice with emoji>"},
-    "favorite_dish": {"dish_name": "<translated>", "description": "<translated, ~10 words celebrating why user loves it! 🌟>"},
-    "cuisine_twist": "<translated, ~10 words with excitement about trying new cuisines! 🍽️>",
-    "translation_keys": {"foods_to_reduce_or_avoid": "<translated>", "healthier_foods": "<translated>", "general_recommendations": "<translated>", "favorite_dish": "<translated>", "cuisine_twist": "<translated>"}
+    "foods_to_reduce_or_avoid": [{"dish_name": "<translated>", "reason": "<concise reason, 4-6 words, 1 emoji max>"}],
+    "foods_to_reduce_title_color": "red",
+    "healthier_foods": [{"dish_name": "<translated>", "reason": "<concise reason, 4-6 words, 1 emoji max>"}],
+    "healthier_foods_title_color": "green",
+    "general_recommendations": {"<key>": "<brief advice, 3-6 words, 1 emoji max>"},
+    "favorite_dish": {"dish_name": "<translated>", "description": "<4-6 words, 1 emoji max>"},
+    "recommended_dish": {"cuisine": "<cuisine name>", "dish": "<specific dish name translated>", "description": "<3-5 words>"} OR empty object {},
+    "age_based_health_advice": "<targeted advice based on user age, 8-12 words, 1 emoji>",
+    "coffee_warning": "<if >=3 coffees/day: max 10 words, 1 emoji, else empty string>",
+    "translation_keys": {"foods_to_reduce_or_avoid": "<translated>", "healthier_foods": "<translated>", "general_recommendations": "<translated>", "favorite_dish": "<translated>", "recommended_dish": "<translated>", "age_based_health_advice": "<translated>", "coffee_warning": "<translated>"}
   }
   
-  CRITICAL: Keys "foods_to_reduce_or_avoid", "healthier_foods", "general_recommendations", "translation_keys", "dish_name", "reason", "description", "favorite_dish", "cuisine_twist" MUST stay in English. NEVER translate keys.
-  Translate ONLY the values to respond_in_language.
-  TONE RULES - Be friendly and supportive! 😊
-  - Use encouraging language: "Try swapping..." instead of "Avoid...", "You're doing great with..." instead of just facts
-  - Add relevant emojis to reasons and recommendations (🥗🍎💪🌟😋🎉)
-  - Be positive even when suggesting reductions: "Maybe enjoy less often" instead of "Stop eating"
-  - Celebrate healthy choices the user already makes!
+  CRITICAL: Keys must stay in English. NEVER translate keys. Translate ONLY values to respond_in_language.
+  BREVITY RULES:
+  - Maximum 1 emoji per item. No emoji chains.
+  - reason: 4-6 words max (e.g., "High sugar, try less 🍬")
+  - general_recommendations: 3-6 words per advice
   - 3 items each for foods_to_reduce_or_avoid and healthier_foods
-  - 3 key:value pairs for general_recommendations (6-20 words each, warm and motivating!)
-  - favorite_dish: pick user's most eaten healthy dish from history, celebrate it with enthusiasm! 🎉
-  - cuisine_twist: suggest trying different cuisines with excitement (Italian pasta, French macarons, Asian stir-fry, etc.) 🌍
+  - 3 key:value pairs for general_recommendations
+  - favorite_dish: most eaten healthy dish, 4-6 words
+  - recommended_dish: ONLY recommend if dish has health_rating 80+. Pick ONE specific dish from cuisines (Italian: Risotto/Pasta Carbonara, French: Ratatouille/Nicoise Salad, Japanese: Miso Salmon/Sushi, Mediterranean: Greek Salad/Hummus Bowl, Asian: Stir-fry/Pho, Mexican: Fish Tacos/Guacamole). If no dish with rating 80+, return empty object {}.
+  SPECIAL RULES:
+  - COFFEE WARNING: Show ONLY if >=3 coffees per day (3 or more). Max 10 words. Example: "Too much caffeine, reduce intake ☕"
+  - AGE_BASED_HEALTH_ADVICE: Provide ONE general health advice (8-12 words, 1 emoji) based on evidence from NHS and longevity research. Rotate through these evidence-based tips:
+    * Build peak fitness with regular strength training twice weekly 💪
+    * Maintain consistent sleep schedule for better metabolism 😴
+    * Do 150min moderate or 75min vigorous activity weekly 🚴
+    * Include balance and flexibility exercises daily 🧘
+    * Limit alcohol and prioritize hydration throughout day 💧
+    * Focus on whole foods and reduce ultra-processed items 🥗
+  - Use varied advice each time, not always the same tip
 
 respond_in_language: |
   Target language from "respond_in_language" (ISO 639-1). Default: en.
@@ -103,8 +123,9 @@ get_recommendation_local: |
   Exactly 3 keys in order:
   1) <reduce_key_translated>: ["Dish: reason", "Dish: reason", "Dish: reason"]
   2) <healthier_key_translated>: ["Dish: reason", "Dish: reason", "Dish: reason"]
-  3) <recs_key_translated>: ["recommendation", "recommendation", "recommendation"] (6-12 words)
+  3) <recs_key_translated>: ["recommendation", "recommendation", "recommendation"] (3-6 words each)
   
   - Dish names from Food Table only, translated. No generic words.
   - Arrays contain strings only, not objects.
   - No extra keys, no markdown, no trailing text.
+  - Keep text concise: 3-6 words per recommendation, max 1 emoji per item.

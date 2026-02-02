@@ -378,6 +378,9 @@ def json_to_plain_text(json_data):
         "foods_to_reduce_or_avoid": "Foods to Reduce or Avoid",
         "healthier_foods": "Healthier Food Options",
         "general_recommendations": "General Recommendations",
+        "age_based_health_advice": "Health Advice",
+        "recommended_dish": "Try This Dish",
+        "coffee_warning": "Coffee Warning",
     }
 
     section_headers = {
@@ -389,7 +392,9 @@ def json_to_plain_text(json_data):
         if not foods or not isinstance(foods, list):
             return ""
 
-        result = f"{section_headers[header_key]}:\n\n"
+        # Add color emoji based on section
+        emoji = "🔴" if header_key == "foods_to_reduce_or_avoid" else "🟢"
+        result = f"{emoji} {section_headers[header_key]}:\n\n"
         for food in foods:
             if isinstance(food, dict):
                 dish_name = food.get("dish_name", "Unnamed Dish")
@@ -420,11 +425,41 @@ def json_to_plain_text(json_data):
     output_text += format_food_list(json_data.get("healthier_foods"), "healthier_foods")
     output_text += format_recommendations(json_data.get("general_recommendations"))
 
+    # Add age-based health advice
+    age_advice = json_data.get("age_based_health_advice")
+    if age_advice and isinstance(age_advice, str) and age_advice.strip():
+        output_text += f"💡 {section_headers['age_based_health_advice']}:\n{age_advice}\n\n"
+
+    # Add recommended dish (only if present and not empty)
+    recommended_dish = json_data.get("recommended_dish")
+    if recommended_dish and isinstance(recommended_dish, dict) and recommended_dish:
+        cuisine = recommended_dish.get("cuisine", "")
+        dish = recommended_dish.get("dish", "")
+        desc = recommended_dish.get("description", "")
+        # Only show if dish name is present
+        if dish and dish.strip():
+            output_text += f"🍽️ {section_headers['recommended_dish']}:\n{dish}"
+            if cuisine:
+                output_text += f" ({cuisine})"
+            if desc:
+                output_text += f" - {desc}"
+            output_text += "\n\n"
+
+    # Add coffee warning if present
+    coffee_warning = json_data.get("coffee_warning")
+    if coffee_warning and isinstance(coffee_warning, str) and coffee_warning.strip():
+        output_text += f"☕ {section_headers['coffee_warning']}:\n{coffee_warning}\n\n"
+
     excluded_fields = {
         "general_recommendations",
         "healthier_foods",
         "foods_to_reduce_or_avoid",
         "translation_keys",
+        "age_based_health_advice",
+        "recommended_dish",
+        "coffee_warning",
+        "foods_to_reduce_title_color",
+        "healthier_foods_title_color",
     }
 
     for key, value in json_data.items():
