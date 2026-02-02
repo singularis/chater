@@ -6,6 +6,9 @@ dlp-secret-auth
 dlp_types.py
 certs
 depricated_chater
+docs
+QUICK_FIX_COMMANDS.sh
+QUICK_FIX_PROTOBUF.sh
 
 target/
 !.mvn/wrapper/maven-wrapper.jar
