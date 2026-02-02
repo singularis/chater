@@ -1,17 +1,28 @@
 default_prompt: |
   Analyze photo. Return ONLY valid JSON, no text/comments/fences. Keys in exact order shown. Numbers as integers without units.
   
+  STEP 0 - WATER DETECTION (CHECK THIS FIRST, BEFORE ANYTHING ELSE):
+  Does photo contain glass/bottle/cup/pitcher with transparent/clear liquid inside?
+  Is liquid colorless or slightly tinted by glass/lighting (NOT brown/orange/red/green colored drink)?
+  Is there NO visible food particles, coffee grounds, tea leaves, milk cloudiness?
+  
+  IF YES TO ALL 3 → STOP ANALYSIS, RETURN THIS IMMEDIATELY:
+  {"type":"food_processing","dish_name":"Water","estimated_avg_calories":0,"ingredients":["Water"],"total_avg_weight":250,"health_rating":100,"food_health_level":{"title":"Pure Hydration 💧","description":"Perfect choice! Staying hydrated is essential for health and wellbeing.","health_summary":[{"ingredients":"Water 💧","description":"Zero calories, pure hydration, essential for life","risk":"None","benefit":"Essential hydration"}]},"contains":{"proteins":0,"fats":0,"carbohydrates":0,"sugar":0,"is_alcohol":false}}
+  
+  EXAMPLES OF WATER (return Water response):
+  - Plain glass of water (even with fancy crystal patterns, engravings, reflections)
+  - Bottle of water (plastic, glass, any brand)
+  - Water with ice cubes
+  - Water with bubbles/carbonation
+  - Water in any transparent container
+  IGNORE: glass patterns, reflections, hand holding glass, background objects
+  
+  If NOT food/drink: {"error": "NOT A FOOD"}
+  
   CRITICAL RULES:
   1. Use SINGULAR form for ALL dish names (Apple not Apples, Date not Dates, Fry not Fries)
   2. Rating = product quality ONLY, NOT quantity (1 apple = 5 apples = same rating)
   3. Check MANDATORY REFERENCE RATINGS table first - if product listed, USE THAT EXACT RATING
-  
-  SPECIAL FAST-TRACK FOR WATER:
-  If photo shows water/drinking water in ANY form (glass, bottle, cup, pitcher of clear/transparent liquid, even with bubbles, ice, condensation, reflections - if it looks like plain drinking water, it IS water):
-  IMPORTANT: Ignore color variations from lighting/glass/reflections. If main content is drinking water (not juice, not milk, not colored drink), recognize as Water.
-  {"type":"food_processing","dish_name":"Water","estimated_avg_calories":0,"ingredients":["Water"],"total_avg_weight":250,"health_rating":100,"food_health_level":{"title":"Pure Hydration 💧","description":"Perfect choice! Staying hydrated is essential for health and wellbeing.","health_summary":[{"ingredients":"Water 💧","description":"Zero calories, pure hydration, essential for life","risk":"None","benefit":"Essential hydration"}]},"contains":{"proteins":0,"fats":0,"carbohydrates":0,"sugar":0,"is_alcohol":false}}
-  
-  If NOT food/drink: {"error": "NOT A FOOD"}
   
   If food/drink (including packaged items):
   {"type":"food_processing","dish_name":"<name>","estimated_avg_calories":<int>,"ingredients":["<item>"],"total_avg_weight":<int>,"health_rating":<int>,"food_health_level":{"title":"<4 words max + emoji>","description":"<20 words max>","health_summary":[{"ingredients":"<name + emoji>","description":"<10 words max>","risk":"<5 words, if harmful>","benefit":"<5 words, if healthy>"}]},"contains":{"proteins":<int>,"fats":<int>,"carbohydrates":<int>,"sugar":<int>,"is_alcohol":<bool>}}
