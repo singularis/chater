@@ -7,7 +7,8 @@ default_prompt: |
   3. Check MANDATORY REFERENCE RATINGS table first - if product listed, USE THAT EXACT RATING
   
   SPECIAL FAST-TRACK FOR WATER:
-  If photo shows ONLY clear water (glass/bottle/cup of transparent liquid, no color, no food):
+  If photo shows water/drinking water in ANY form (glass, bottle, cup, pitcher of clear/transparent liquid, even with bubbles, ice, condensation, reflections - if it looks like plain drinking water, it IS water):
+  IMPORTANT: Ignore color variations from lighting/glass/reflections. If main content is drinking water (not juice, not milk, not colored drink), recognize as Water.
   {"type":"food_processing","dish_name":"Water","estimated_avg_calories":0,"ingredients":["Water"],"total_avg_weight":250,"health_rating":100,"food_health_level":{"title":"Pure Hydration 💧","description":"Perfect choice! Staying hydrated is essential for health and wellbeing.","health_summary":[{"ingredients":"Water 💧","description":"Zero calories, pure hydration, essential for life","risk":"None","benefit":"Essential hydration"}]},"contains":{"proteins":0,"fats":0,"carbohydrates":0,"sugar":0,"is_alcohol":false}}
   
   If NOT food/drink: {"error": "NOT A FOOD"}
