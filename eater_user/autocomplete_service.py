@@ -12,8 +12,10 @@ from fastapi.responses import Response
 from kafka_producer import produce_message
 from logging_config import setup_logging
 from neo4j_connection import neo4j_connection
-from postgres import autocomplete_query, database, get_food_record_by_time, ensure_nickname_column, update_nickname, get_nickname
-from proto import add_friend_pb2, get_friends_pb2, share_food_pb2
+from postgres import (autocomplete_query, database, get_food_record_by_time, 
+                      ensure_nickname_column, update_nickname, get_nickname,
+                      ensure_chess_games_table, record_chess_game, get_chess_stats)
+from proto import add_friend_pb2, get_friends_pb2, share_food_pb2, chess_game_pb2
 from starlette.websockets import WebSocketState
 
 app = FastAPI(title="Autocomplete Service", version="1.0.0")
@@ -57,6 +59,10 @@ async def startup():
         await ensure_nickname_column()
     except:
         logger.warning("Could not ensure nickname column")
+    try:
+        await ensure_chess_games_table()
+    except:
+        logger.warning("Could not ensure chess_games table")
     neo4j_connection.connect()
 
 
@@ -445,6 +451,116 @@ async def websocket_autocomplete(websocket: WebSocket):
     except:
         if user_email:
             manager.disconnect(websocket, user_email)
+
+
+@app.post("/autocomplete/record_chess_game")
+@token_required
+async def record_chess_game_endpoint(request: Request, user_email: str):
+    try:
+        logger.debug(f"/autocomplete/record_chess_game: start for user={user_email}")
+        body = await request.body()
+        if not body:
+            logger.warning("/autocomplete/record_chess_game: empty body")
+            raise HTTPException(status_code=400, detail="Request body required")
+
+        try:
+            chess_request = chess_game_pb2.RecordChessGameRequest()
+            chess_request.ParseFromString(body)
+        except:
+            logger.exception("/autocomplete/record_chess_game: failed to parse protobuf body")
+            raise HTTPException(status_code=400, detail="Invalid protobuf format")
+
+        player_email = chess_request.player_email.strip()
+        opponent_email = chess_request.opponent_email.strip()
+        result = chess_request.result.strip()
+        timestamp = int(chess_request.timestamp)
+        
+        logger.debug(f"/autocomplete/record_chess_game: parsed request - player={player_email}, opponent={opponent_email}, result={result}")
+
+        if not player_email or not opponent_email:
+            logger.warning("/autocomplete/record_chess_game: missing player_email or opponent_email")
+            raise HTTPException(status_code=400, detail="Both player_email and opponent_email are required")
+        
+        if player_email != user_email:
+            logger.warning(f"/autocomplete/record_chess_game: player_email != token user ({player_email} != {user_email})")
+            raise HTTPException(status_code=403, detail="Cannot record game for another user")
+        
+        if result not in ["win", "loss", "draw"]:
+            logger.warning(f"/autocomplete/record_chess_game: invalid result={result}")
+            raise HTTPException(status_code=400, detail="result must be 'win', 'loss', or 'draw'")
+
+        # Record the game
+        success = await record_chess_game(player_email, opponent_email, result, timestamp)
+        
+        if not success:
+            logger.error("/autocomplete/record_chess_game: failed to record game")
+            raise HTTPException(status_code=500, detail="Failed to record chess game")
+
+        # Get updated stats for both players
+        player_stats = await get_chess_stats(player_email, opponent_email)
+        opponent_stats = await get_chess_stats(opponent_email, player_email)
+        
+        # Build response
+        response = chess_game_pb2.RecordChessGameResponse()
+        response.success = True
+        response.player_score = player_stats["score"] if player_stats else "0:0"
+        response.opponent_score = opponent_stats["score"] if opponent_stats else "0:0"
+        
+        logger.info(f"/autocomplete/record_chess_game: success - player_score={response.player_score}, opponent_score={response.opponent_score}")
+        return Response(content=response.SerializeToString(), media_type="application/x-protobuf")
+    
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("/autocomplete/record_chess_game: unexpected error")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/autocomplete/get_chess_stats")
+@token_required
+async def get_chess_stats_endpoint(request: Request, user_email: str):
+    try:
+        logger.debug(f"/autocomplete/get_chess_stats: start for user={user_email}")
+        body = await request.body()
+        if not body:
+            logger.warning("/autocomplete/get_chess_stats: empty body")
+            raise HTTPException(status_code=400, detail="Request body required")
+
+        try:
+            stats_request = chess_game_pb2.GetChessStatsRequest()
+            stats_request.ParseFromString(body)
+        except:
+            logger.exception("/autocomplete/get_chess_stats: failed to parse protobuf body")
+            raise HTTPException(status_code=400, detail="Invalid protobuf format")
+
+        request_email = stats_request.user_email.strip()
+        
+        if request_email != user_email:
+            logger.warning(f"/autocomplete/get_chess_stats: request_email != token user ({request_email} != {user_email})")
+            raise HTTPException(status_code=403, detail="Cannot get stats for another user")
+
+        # Get stats (last opponent)
+        stats = await get_chess_stats(user_email)
+        
+        # Build response
+        response = chess_game_pb2.GetChessStatsResponse()
+        if stats:
+            response.score = stats["score"]
+            response.opponent_name = stats["opponent_name"]
+            response.last_game_date = stats["last_game_date"]
+        else:
+            response.score = "0:0"
+            response.opponent_name = ""
+            response.last_game_date = ""
+        
+        logger.info(f"/autocomplete/get_chess_stats: success - score={response.score}")
+        return Response(content=response.SerializeToString(), media_type="application/x-protobuf")
+    
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("/autocomplete/get_chess_stats: unexpected error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 if __name__ == "__main__":
