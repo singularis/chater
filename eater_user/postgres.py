@@ -149,26 +149,6 @@ async def get_food_record_by_time(time: int, user_email: str):
 
 # MARK: - Chess Games Functions
 
-async def ensure_chess_games_table():
-    """Ensure chess_games table exists"""
-    try:
-        query = """
-        CREATE TABLE IF NOT EXISTS chess_games (
-            id SERIAL PRIMARY KEY,
-            player_email TEXT NOT NULL,
-            opponent_email TEXT NOT NULL,
-            result TEXT NOT NULL,
-            timestamp BIGINT NOT NULL,
-            created_at TIMESTAMP DEFAULT NOW()
-        );
-        CREATE INDEX IF NOT EXISTS idx_chess_player ON chess_games(player_email);
-        CREATE INDEX IF NOT EXISTS idx_chess_opponent ON chess_games(opponent_email);
-        CREATE INDEX IF NOT EXISTS idx_chess_timestamp ON chess_games(timestamp DESC);
-        """
-        await database.execute(query)
-    except Exception:
-        pass
-
 
 async def record_chess_game(player_email: str, opponent_email: str, result: str, timestamp: int):
     """

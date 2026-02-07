@@ -119,6 +119,7 @@ def verify_indexes(connection):
             "feedbacks",
             "alcohol_consumption",
             "alcohol_for_day",
+            "chess_games",
         ]:
             result = connection.execute(text(f"""
                 SELECT EXISTS (
@@ -364,6 +365,32 @@ def create_tables():
                 logger.error(f"Error during table creation: {str(e)}")
                 raise
 
+            # Create chess_games table (used by eater_user; no ORM model)
+            logger.info("Creating chess_games table...")
+            try:
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS chess_games (
+                        id SERIAL PRIMARY KEY,
+                        player_email TEXT NOT NULL,
+                        opponent_email TEXT NOT NULL,
+                        result TEXT NOT NULL,
+                        timestamp BIGINT NOT NULL,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """))
+                connection.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_chess_player ON chess_games(player_email)"
+                ))
+                connection.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_chess_opponent ON chess_games(opponent_email)"
+                ))
+                connection.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_chess_timestamp ON chess_games(timestamp DESC)"
+                ))
+                logger.info("chess_games table created successfully")
+            except Exception as e:
+                logger.warning(f"Failed to create chess_games table: {e}")
+
             # Ensure all required columns exist in each table
             logger.info("Checking and adding required columns...")
             try:
@@ -444,6 +471,7 @@ def create_tables():
                     "feedbacks",
                     "alcohol_consumption",
                     "alcohol_for_day",
+                    "chess_games",
                 ]:
                     result = connection.execute(text(f"""
                         SELECT EXISTS (
@@ -698,6 +726,34 @@ def create_tables():
                         "Skipping feedbacks table indexes - table does not exist"
                     )
 
+                # chess_games table indexes (if table exists)
+                if "chess_games" in existing_tables:
+                    try:
+                        connection.execute(
+                            text(
+                                "CREATE INDEX IF NOT EXISTS idx_chess_player ON public.chess_games USING btree(player_email)"
+                            )
+                        )
+                        connection.execute(
+                            text(
+                                "CREATE INDEX IF NOT EXISTS idx_chess_opponent ON public.chess_games USING btree(opponent_email)"
+                            )
+                        )
+                        connection.execute(
+                            text(
+                                "CREATE INDEX IF NOT EXISTS idx_chess_timestamp ON public.chess_games USING btree(timestamp DESC)"
+                            )
+                        )
+                        logger.info("chess_games table indexes created successfully")
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to create chess_games table indexes: {e}"
+                        )
+                else:
+                    logger.info(
+                        "Skipping chess_games table indexes - table does not exist"
+                    )
+
                 logger.info("Index creation completed")
 
                 logger.info("Verifying index creation...")
@@ -744,6 +800,7 @@ def test_query_performance(connection):
             "feedbacks",
             "alcohol_consumption",
             "alcohol_for_day",
+            "chess_games",
         ]:
             result = connection.execute(text(f"""
                 SELECT EXISTS (
