@@ -237,7 +237,10 @@ def get_respond_in_language(user_email: str) -> str:
 
 
 def create_multilingual_prompt(
-    base_prompt_key: str, user_email: str, is_add_lang_instruction: bool = True
+    base_prompt_key: str,
+    user_email: str,
+    is_add_lang_instruction: bool = True,
+    language_override: str | None = None,
 ) -> str:
     """
     Create a multilingual prompt by combining a base prompt with language instructions.
@@ -245,6 +248,7 @@ def create_multilingual_prompt(
     Args:
         base_prompt_key: The key for the base prompt in prompt.yaml
         user_email: User email to determine language preference
+        language_override: If set (e.g. from request), use this instead of stored user language
 
     Returns:
         Combined prompt with language instructions
@@ -252,7 +256,10 @@ def create_multilingual_prompt(
     try:
         base_prompt = get_prompt(base_prompt_key)
         lang_instruction = get_prompt("respond_in_language")
-        user_lang = get_respond_in_language(user_email)
+        if language_override and len(language_override.strip()) == 2:
+            user_lang = language_override.strip().lower()
+        else:
+            user_lang = get_respond_in_language(user_email)
 
         # Combine prompts with language instruction
         if is_add_lang_instruction:

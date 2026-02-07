@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from common import create_multilingual_prompt, json_to_plain_text
+from common import create_multilingual_prompt, get_prompt, json_to_plain_text
 from kafka_consumer_service import (get_message_response,
                                     get_user_message_response)
 from kafka_producer import KafkaDispatchError, send_kafka_message
@@ -510,6 +510,10 @@ def get_recommendation(request, user_email, local_model_service):
         proto_request.ParseFromString(request.data)
 
         days = proto_request.days
+        # Use app language from request so recommendation matches UI language
+        language_code = (getattr(proto_request, "language_code", "") or "").strip().lower()
+        language_override = language_code if len(language_code) == 2 else None
+
         if local_model_service:
             processing_topic = local_model_service.get_user_kafka_topic(
                 user_email, "gemini-send"
@@ -517,13 +521,18 @@ def get_recommendation(request, user_email, local_model_service):
             prompt = local_model_service.get_user_prompt(
                 user_email, "get_recommendation"
             )
+            if language_override:
+                lang_instruction = get_prompt("respond_in_language")
+                prompt = f"{prompt}\n {lang_instruction}\n Target language: {language_override} "
             logger.debug(
                 "Routing recommendation for user %s to topic %s",
                 user_email,
                 processing_topic,
             )
         else:
-            prompt = create_multilingual_prompt("get_recommendation", user_email)
+            prompt = create_multilingual_prompt(
+                "get_recommendation", user_email, language_override=language_override
+            )
             processing_topic = "gemini-send"
             logger.warning(
                 "User model tier unavailable; defaulting topic %s for user %s",

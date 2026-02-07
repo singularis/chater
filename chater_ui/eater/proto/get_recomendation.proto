@@ -4,6 +4,7 @@ package eater;
 
 message RecommendationRequest {
   int32 days = 1;
+  string language_code = 2;  // ISO 639-1 (e.g. pl, uk). Recommendation text will be in this language.
 }
 
 message RecommendationResponse {
