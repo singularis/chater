@@ -28,6 +28,7 @@ from eater.eater import (alcohol_latest, alcohol_range, delete_food_record,
                          eater_today, food_health_level, get_photo_file,
                          get_recommendations, manual_weight_record,
                          modify_food_record_data, set_language)
+from eater.chess import record_chess_game_request
 from eater.feedback import submit_feedback_request
 from eater.user_mgmt import update_user_nickname
 
@@ -356,6 +357,13 @@ def nickname_update(user_email):
 @token_required
 def get_food_health_level(user_email):
     return food_health_level(request=request, user_email=user_email)
+
+
+@app.route("/record_chess_game", methods=["POST"])
+@track_eater_operation("record_chess_game")
+@token_required
+def record_chess_game_route(user_email):
+    return record_chess_game_request(user_email)
 
 
 @app.route("/metrics")

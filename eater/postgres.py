@@ -6,7 +6,7 @@ from typing import Optional
 
 from sqlalchemy import (ARRAY, JSON, BigInteger, Column, Date, Float, Integer,
                         PrimaryKeyConstraint, String, cast, create_engine,
-                        func)
+                        func, text)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -857,4 +857,63 @@ def get_food_health_level(time_value: int, user_email: str = None):
             return None
     except Exception as e:
         logger.error(f"Error retrieving food_health_level: {e}")
+        return None
+
+
+def record_chess_game(player_email: str, opponent_email: str, result: str, timestamp: int):
+    """Record a chess game for both players (sync). result: win, loss, or draw."""
+    try:
+        with get_db_session() as session:
+            session.execute(
+                text("""
+                    INSERT INTO chess_games (player_email, opponent_email, result, timestamp)
+                    VALUES (:player_email, :opponent_email, :result, :timestamp)
+                """),
+                {
+                    "player_email": player_email,
+                    "opponent_email": opponent_email,
+                    "result": result,
+                    "timestamp": timestamp,
+                },
+            )
+            opponent_result = "loss" if result == "win" else ("win" if result == "loss" else "draw")
+            session.execute(
+                text("""
+                    INSERT INTO chess_games (player_email, opponent_email, result, timestamp)
+                    VALUES (:player_email, :opponent_email, :result, :timestamp)
+                """),
+                {
+                    "player_email": opponent_email,
+                    "opponent_email": player_email,
+                    "result": opponent_result,
+                    "timestamp": timestamp,
+                },
+            )
+            session.commit()
+        return True
+    except Exception as e:
+        logger.exception("record_chess_game failed: %s", e)
+        return False
+
+
+def get_chess_stats_sync(user_email: str, opponent_email: str):
+    """Return wins/losses for user against opponent. Returns None on error."""
+    try:
+        with get_db_session() as session:
+            result = session.execute(
+                text("""
+                    SELECT
+                        COUNT(*) FILTER (WHERE result = 'win') AS wins,
+                        COUNT(*) FILTER (WHERE result = 'loss') AS losses
+                    FROM chess_games
+                    WHERE player_email = :user_email AND opponent_email = :opponent_email
+                """),
+                {"user_email": user_email, "opponent_email": opponent_email},
+            )
+            row = result.fetchone()
+            if row:
+                return {"wins": row[0] or 0, "losses": row[1] or 0}
+        return {"wins": 0, "losses": 0}
+    except Exception as e:
+        logger.exception("get_chess_stats_sync failed: %s", e)
         return None

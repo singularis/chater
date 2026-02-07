@@ -1,98 +1,15 @@
-"""Chess game endpoints: record game, get stats, get all data."""
+"""Chess read-only endpoints: get stats, get all data. Recording is via app + Kafka + eater."""
 import json
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
 from common import token_required
-from connection_manager import manager, safe_send_websocket_message
-from postgres import database, get_chess_stats, record_chess_game
+from postgres import database, get_chess_stats
 from proto import chess_game_pb2
 
 logger = logging.getLogger("autocomplete_service")
 
 router = APIRouter(prefix="/autocomplete", tags=["chess"])
-
-
-@router.post("/record_chess_game")
-@token_required
-async def record_chess_game_endpoint(request: Request, user_email: str):
-    try:
-        logger.debug(f"/autocomplete/record_chess_game: start for user={user_email}")
-        body = await request.body()
-        if not body:
-            logger.warning("/autocomplete/record_chess_game: empty body")
-            raise HTTPException(status_code=400, detail="Request body required")
-
-        try:
-            data = json.loads(body)
-            player_email = data.get("player_email", "").strip()
-            opponent_email = data.get("opponent_email", "").strip()
-            result = data.get("result", "").strip()
-            timestamp = int(data.get("timestamp", 0))
-            logger.debug(f"/autocomplete/record_chess_game: parsed JSON request")
-        except Exception:
-            try:
-                chess_request = chess_game_pb2.RecordChessGameRequest()
-                chess_request.ParseFromString(body)
-                player_email = chess_request.player_email.strip()
-                opponent_email = chess_request.opponent_email.strip()
-                result = chess_request.result.strip()
-                timestamp = int(chess_request.timestamp)
-                logger.debug(f"/autocomplete/record_chess_game: parsed protobuf request")
-            except Exception:
-                logger.exception("/autocomplete/record_chess_game: failed to parse body")
-                raise HTTPException(status_code=400, detail="Invalid request format")
-
-        logger.debug(f"/autocomplete/record_chess_game: parsed request - player={player_email}, opponent={opponent_email}, result={result}")
-
-        if not player_email or not opponent_email:
-            logger.warning("/autocomplete/record_chess_game: missing player_email or opponent_email")
-            raise HTTPException(status_code=400, detail="Both player_email and opponent_email are required")
-
-        if player_email != user_email:
-            logger.warning(f"/autocomplete/record_chess_game: player_email != token user ({player_email} != {user_email})")
-            raise HTTPException(status_code=403, detail="Cannot record game for another user")
-
-        if result not in ["win", "loss", "draw"]:
-            logger.warning(f"/autocomplete/record_chess_game: invalid result={result}")
-            raise HTTPException(status_code=400, detail="result must be 'win', 'loss', or 'draw'")
-
-        success = await record_chess_game(player_email, opponent_email, result, timestamp)
-
-        if not success:
-            logger.error("/autocomplete/record_chess_game: failed to record game")
-            raise HTTPException(status_code=500, detail="Failed to record chess game")
-
-        player_stats = await get_chess_stats(player_email, opponent_email)
-        opponent_stats = await get_chess_stats(opponent_email, player_email)
-
-        if opponent_email in manager.user_connections:
-            opponent_ws = manager.user_connections[opponent_email]
-            notification = {
-                "type": "chess_game_update",
-                "player_email": player_email,
-                "result": result,
-                "score": opponent_stats["score"] if opponent_stats else "0:0"
-            }
-            await safe_send_websocket_message(opponent_ws, notification)
-            logger.info(f"/autocomplete/record_chess_game: sent WebSocket notification to {opponent_email}")
-
-        response_data = {
-            "success": True,
-            "player_wins": player_stats.get("wins", 0) if player_stats else 0,
-            "player_losses": player_stats.get("losses", 0) if player_stats else 0,
-            "opponent_wins": opponent_stats.get("wins", 0) if opponent_stats else 0,
-            "opponent_losses": opponent_stats.get("losses", 0) if opponent_stats else 0
-        }
-
-        logger.info(f"/autocomplete/record_chess_game: success - player={player_stats['score'] if player_stats else '0:0'}, opponent={opponent_stats['score'] if opponent_stats else '0:0'}")
-        return response_data
-
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception("/autocomplete/record_chess_game: unexpected error")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/get_chess_stats")

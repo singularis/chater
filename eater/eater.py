@@ -8,7 +8,8 @@ from kafka_producer import produce_message
 from logging_config import setup_logging
 from postgres import (AlcoholConsumption, AlcoholForDay, delete_food,
                       get_alcohol_events_in_range, get_custom_date_dishes,
-                      get_food_health_level, get_today_dishes, modify_food)
+                      get_chess_stats_sync, get_food_health_level, get_today_dishes,
+                      modify_food, record_chess_game)
 from process_gpt import get_recommendation, process_food, process_weight
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ def process_messages():
         "get_alcohol_latest",
         "get_alcohol_range",
         "get_food_health_level",
+        "record_chess_game",
     ]
     logger.info(f"Starting message processing with topics: {topics}")
     while True:
@@ -252,6 +254,86 @@ def process_messages():
                             },
                         },
                     )
+                elif message.topic() == "record_chess_game":
+                    req = value_dict.get("value", {})
+                    player_email = (req.get("player_email") or "").strip()
+                    opponent_email = (req.get("opponent_email") or "").strip()
+                    result = (req.get("result") or "").strip()
+                    timestamp = int(req.get("timestamp") or 0)
+                    if player_email != user_email:
+                        logger.warning(
+                            "record_chess_game: player_email %s != user_email %s",
+                            player_email,
+                            user_email,
+                        )
+                        produce_message(
+                            topic="record_chess_game_response",
+                            message={
+                                "key": message_key,
+                                "value": {
+                                    "success": False,
+                                    "error": "Forbidden",
+                                    "user_email": user_email,
+                                },
+                            },
+                        )
+                    elif result not in ("win", "loss", "draw"):
+                        produce_message(
+                            topic="record_chess_game_response",
+                            message={
+                                "key": message_key,
+                                "value": {
+                                    "success": False,
+                                    "error": "result must be win, loss, or draw",
+                                    "user_email": user_email,
+                                },
+                            },
+                        )
+                    else:
+                        ok = record_chess_game(
+                            player_email, opponent_email, result, timestamp
+                        )
+                        if not ok:
+                            produce_message(
+                                topic="record_chess_game_response",
+                                message={
+                                    "key": message_key,
+                                    "value": {
+                                        "success": False,
+                                        "error": "Failed to record game",
+                                        "user_email": user_email,
+                                    },
+                                },
+                            )
+                        else:
+                            player_stats = get_chess_stats_sync(
+                                player_email, opponent_email
+                            )
+                            opponent_stats = get_chess_stats_sync(
+                                opponent_email, player_email
+                            )
+                            produce_message(
+                                topic="record_chess_game_response",
+                                message={
+                                    "key": message_key,
+                                    "value": {
+                                        "success": True,
+                                        "user_email": user_email,
+                                        "player_wins": (player_stats or {}).get(
+                                            "wins", 0
+                                        ),
+                                        "player_losses": (player_stats or {}).get(
+                                            "losses", 0
+                                        ),
+                                        "opponent_wins": (opponent_stats or {}).get(
+                                            "wins", 0
+                                        ),
+                                        "opponent_losses": (opponent_stats or {}).get(
+                                            "losses", 0
+                                        ),
+                                    },
+                                },
+                            )
             except Exception as e:
                 logger.error(
                     f"Failed to process message for user {user_email}: {e}, message {value_dict}"

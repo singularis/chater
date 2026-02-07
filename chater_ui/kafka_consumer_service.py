@@ -37,6 +37,7 @@ class KafkaConsumerService:
             "send_alcohol_latest": {"name": "send_alcohol_latest"},
             "send_alcohol_range": {"name": "send_alcohol_range"},
             "send_food_health_level": {"name": "send_food_health_level"},
+            "record_chess_game_response": {"name": "record_chess_game_response"},
         }
 
     def create_consumer(self, topics):
