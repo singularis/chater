@@ -16,7 +16,10 @@ public class GoogleGemini {
     private static final String API_MODEL = System.getenv("GEMINI_MODEL");
     private static final String GOOGLE_API_KEY = System.getenv("GOOGLE_API_KEY");
     private static final String BOOTSTRAP_SERVER = System.getenv("BOOTSTRAP_SERVER");
-    private static final String TOPIC = "gemini-send";
+    private static final boolean IS_DEV = "true".equalsIgnoreCase(System.getenv("IS_DEV"));
+    private static final String TOPIC = IS_DEV ? "gemini-send_dev" : "gemini-send";
+    private static final String OUTPUT_TOPIC = IS_DEV ? "gemini-response_dev" : "gemini-response";
+    private static final String GROUP_ID = IS_DEV ? "chamini-dev" : "chamini";
     private static final String GEMINI_THINK_MODEL = System.getenv("GEMINI_THINK_MODEL");
 
     public static void main(String[] args) {
@@ -25,7 +28,7 @@ public class GoogleGemini {
             return;
         }
 
-        KafkaConsumer consumer = new KafkaConsumer(BOOTSTRAP_SERVER, "chamini", TOPIC);
+        KafkaConsumer consumer = new KafkaConsumer(BOOTSTRAP_SERVER, GROUP_ID, TOPIC);
         KafkaProducerUtil producer = new KafkaProducerUtil(BOOTSTRAP_SERVER) {
             @Override
             protected KafkaProducer<String, String> createProducer(Properties props) {
@@ -58,7 +61,7 @@ public class GoogleGemini {
             JSONObject jsonObject = new JSONObject(message);
             uuid = jsonObject.getString("key");
             Object value = jsonObject.get("value");
-            
+
             // Handle both string and JSON object values
             if (value instanceof String) {
                 question = (String) value;
@@ -71,7 +74,7 @@ public class GoogleGemini {
                     userEmail = valueObject.getString("user_email");
                 }
             }
-            
+
             if (think) {
                 model = GEMINI_THINK_MODEL;
             } else {
@@ -95,18 +98,18 @@ public class GoogleGemini {
                     try {
                         JSONObject valueResponse = new JSONObject(cleanedText);
                         valueResponse.put("user_email", userEmail);
-                        producer.sendMessage("gemini-response", uuid, valueResponse);
+                        producer.sendMessage(OUTPUT_TOPIC, uuid, valueResponse);
                     } catch (Exception e) {
                         JSONObject valueResponse = new JSONObject();
                         valueResponse.put("response", cleanedText);
                         valueResponse.put("user_email", userEmail);
-                        producer.sendMessage("gemini-response", uuid, valueResponse);
+                        producer.sendMessage(OUTPUT_TOPIC, uuid, valueResponse);
                     }
                 } else {
                     try {
-                        producer.sendMessage("gemini-response", uuid, new JSONObject(cleanedText));
+                        producer.sendMessage(OUTPUT_TOPIC, uuid, new JSONObject(cleanedText));
                     } catch (Exception e) {
-                        producer.sendMessage("gemini-response", uuid, cleanedText);
+                        producer.sendMessage(OUTPUT_TOPIC, uuid, cleanedText);
                     }
                 }
             }
@@ -118,9 +121,9 @@ public class GoogleGemini {
     public static GenerateContentResponse getHttpURLConnection(String question, String model) throws IOException {
         Client client = new Client();
         GenerateContentResponse response = client.models.generateContent(
-            model,
-            question,
-            null);
+                model,
+                question,
+                null);
         return response;
     }
 }

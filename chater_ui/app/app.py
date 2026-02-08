@@ -39,9 +39,13 @@ logger = logging.getLogger(__name__)
 
 log_level = os.getenv("LOG_LEVEL", "INFO")
 
+# Dev environment detection
+IS_DEV = os.getenv("IS_DEV", "false").lower() == "true"
+URL_PREFIX = "/dev" if IS_DEV else ""
 
 redis_client = redis.StrictRedis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
-app = Flask(__name__, static_url_path="/chater/static")
+static_url_path = f"{URL_PREFIX}/chater/static" if IS_DEV else "/chater/static"
+app = Flask(__name__, static_url_path=static_url_path)
 
 # Initialize shared MinIO client once at app startup
 try:
@@ -74,9 +78,14 @@ SESSION_LIFETIME = int(os.getenv("SESSION_LIFETIME"))
 ALLOWED_EMAILS = os.getenv("ALLOWED_EMAILS", "").split(",")
 
 google_bp = create_google_blueprint()
-app.register_blueprint(google_bp, url_prefix="/google_login")
+google_login_prefix = f"{URL_PREFIX}/google_login" if IS_DEV else "/google_login"
+app.register_blueprint(google_bp, url_prefix=google_login_prefix)
 CORS(app)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+# Log dev mode status
+if IS_DEV:
+    logger.info("Running in DEV environment - routes will be prefixed with /dev")
 
 # Start the background Kafka consumer service
 logger.info("Starting Kafka Consumer Service...")
@@ -90,7 +99,14 @@ except Exception as exc:
 atexit.register(stop_kafka_consumer_service)
 
 
-@app.route("/favicon.ico")
+def dev_route(path):
+    """Returns the route path with /dev prefix when running in dev environment."""
+    if IS_DEV:
+        return f"/dev{path}"
+    return path
+
+
+@app.route(dev_route("/favicon.ico"))
 def favicon_redirect():
     return redirect(url_for("static", filename="images/favicon.ico"))
 
@@ -133,86 +149,99 @@ def metrics_teardown_request(exc):
         record_http_metrics(start_time=start_time, endpoint=endpoint_label, status=500)
 
 
-@app.route("/chater_login", methods=["GET", "POST"])
+@app.route(dev_route("/chater_login"), methods=["GET", "POST"])
 @track_operation("chater_login")
 def chater_login():
     return login(session=session)
 
 
-@app.route("/google_login")
+@app.route(dev_route("/google_login"))
 @track_operation("google_login")
 def google_login():
     return g_login(session=session, ALLOWED_EMAILS=ALLOWED_EMAILS)
 
 
-@app.route("/chater", methods=["GET", "POST"])
+@app.route(dev_route("/chater"), methods=["GET", "POST"])
 @track_operation("chater")
 def chater():
     return chater_ui(session, target="chater")
 
 
-@app.route("/chamini", methods=["GET", "POST"])
+@app.route(dev_route("/chamini"), methods=["GET", "POST"])
 @track_operation("chamini")
 def chamini():
     return chater_ui(session, target="chamini")
 
 
-@app.route("/gempt", methods=["GET", "POST"])
+@app.route(dev_route("/gempt"), methods=["GET", "POST"])
 @track_operation("gempt")
 def gempt():
     return chater_ui(session, target="gempt")
 
 
-@app.route("/chater_clear_responses", methods=["GET"])
+@app.route(dev_route("/chater_clear_responses"), methods=["GET"])
 @track_operation("chater_clear_responses")
 def chater_clear_responses():
     return chater_clear(session=session)
 
 
-@app.route("/chater_logout")
+@app.route(dev_route("/chater_logout"))
 @track_operation("chater_logout")
 def chater_logout():
     return logout(session=session)
 
 
-@app.route("/chater_wait")
+@app.route(dev_route("/chater_wait"))
 @track_operation("chater_wait")
 def chater_wait():
     logger.warning("Waiting for next chater_login attempt")
     return render_template("wait.html")
 
 
-@app.route("/gphoto", methods=["GET"])
+@app.route(dev_route("/gphoto"), methods=["GET"])
 @track_operation("gphoto")
 def gphoto_ui():
     return gphoto(session, picFolder)
 
 
-@app.route("/gphoto_proxy/<path:resource_path>", methods=["GET"])
+@app.route(dev_route("/gphoto_proxy/<path:resource_path>"), methods=["GET"])
 @track_operation("gphoto_proxy")
 def gphoto_proxy_route(resource_path):
     return gphoto_proxy(resource_path)
 
 
-@app.route("/toggle-switch", methods=["POST"])
+@app.route(dev_route("/toggle-switch"), methods=["POST"])
 @track_operation("toggle_switch")
 def toggle_switch():
     return context.context_switch(session)
 
 
-@app.route("/get-switch-state", methods=["GET"])
+@app.route(dev_route("/get-switch-state"), methods=["GET"])
 @track_operation("get_switch_state")
 def get_switch_state():
     return context.use_switch_state(session)
 
 
-@app.route("/eater_test", methods=["GET"])
+@app.route(dev_route("/toggle-dev-mode"), methods=["POST"])
+@track_operation("toggle_dev_mode")
+def toggle_dev_mode():
+    return context.dev_mode_switch(session)
+
+
+@app.route(dev_route("/get-dev-mode-state"), methods=["GET"])
+@track_operation("get_dev_mode_state")
+def get_dev_mode_state():
+    default_state = "on" if IS_DEV else "off"
+    return context.get_dev_mode_state(session, default_state)
+
+
+@app.route(dev_route("/eater_test"), methods=["GET"])
 @token_required
 def eater(user_email):
     return jsonify({"message": f"Eater endpoint granted for user: {user_email}!"})
 
 
-@app.route("/get_photo", methods=["GET"])
+@app.route(dev_route("/get_photo"), methods=["GET"])
 @track_eater_operation("get_photo")
 def get_photo_route():
     """
@@ -246,7 +275,7 @@ def get_photo_route():
     return send_file(data, mimetype=content_type)
 
 
-@app.route("/eater_receive_photo", methods=["POST"])
+@app.route(dev_route("/eater_receive_photo"), methods=["POST"])
 @track_eater_operation("receive_photo")
 @token_required
 @rate_limit_required
@@ -254,35 +283,35 @@ def eater_receive_photo(user_email):
     return eater_photo(user_email=user_email)
 
 
-@app.route("/eater_get_today", methods=["GET"])
+@app.route(dev_route("/eater_get_today"), methods=["GET"])
 @track_eater_operation("get_today")
 @token_required
 def eater_get_today(user_email):
     return eater_today(user_email=user_email)
 
 
-@app.route("/get_food_custom_date", methods=["POST"])
+@app.route(dev_route("/get_food_custom_date"), methods=["POST"])
 @track_eater_operation("get_food_custom_date")
 @token_required
 def get_food_custom_date(user_email):
     return eater_custom_date(request=request, user_email=user_email)
 
 
-@app.route("/delete_food", methods=["POST"])
+@app.route(dev_route("/delete_food"), methods=["POST"])
 @track_eater_operation("delete_food")
 @token_required
 def delete_food(user_email):
     return delete_food_record(request=request, user_email=user_email)
 
 
-@app.route("/modify_food_record", methods=["POST"])
+@app.route(dev_route("/modify_food_record"), methods=["POST"])
 @track_eater_operation("modify_food_record")
 @token_required
 def modify_food(user_email):
     return modify_food_record_data(request=request, user_email=user_email)
 
 
-@app.route("/get_recommendation", methods=["POST"])
+@app.route(dev_route("/get_recommendation"), methods=["POST"])
 @track_eater_operation("get_recommendation")
 @token_required
 @rate_limit_required
@@ -291,74 +320,74 @@ def recommendations(user_email):
     return recommendation
 
 
-@app.route("/eater_auth", methods=["POST"])
+@app.route(dev_route("/eater_auth"), methods=["POST"])
 @track_eater_operation("eater_auth")
 def eater_auth():
     return eater_auth_request(request=request)
 
 
-@app.route("/manual_weight", methods=["POST"])
+@app.route(dev_route("/manual_weight"), methods=["POST"])
 @track_eater_operation("manual_weight")
 @token_required
 def manual_weight(user_email):
     return manual_weight_record(request=request, user_email=user_email)
 
 
-@app.route("/alcohol_latest", methods=["GET"])
+@app.route(dev_route("/alcohol_latest"), methods=["GET"])
 @track_eater_operation("alcohol_latest")
 @token_required
 def get_alcohol_latest_route(user_email):
     return alcohol_latest(user_email=user_email)
 
 
-@app.route("/alcohol_range", methods=["POST"])
+@app.route(dev_route("/alcohol_range"), methods=["POST"])
 @track_eater_operation("alcohol_range")
 @token_required
 def get_alcohol_range_route(user_email):
     return alcohol_range(request=request, user_email=user_email)
 
 
-@app.route("/feedback", methods=["POST"])
+@app.route(dev_route("/feedback"), methods=["POST"])
 @track_eater_operation("submit_feedback")
 @token_required
 def submit_feedback(user_email):
     return submit_feedback_request(user_email=user_email)
 
 
-@app.route("/eater_admin", methods=["GET", "POST"])
+@app.route(dev_route("/eater_admin"), methods=["GET", "POST"])
 @track_operation("eater_admin")
 def eater_admin():
     return eater_admin_request(session)
 
 
-@app.route("/eater_admin_proxy/<path:resource_path>", methods=["GET"])
+@app.route(dev_route("/eater_admin_proxy/<path:resource_path>"), methods=["GET"])
 @track_operation("eater_admin_proxy")
 def eater_admin_proxy_route(resource_path):
     return eater_admin_proxy(resource_path)
 
 
-@app.route("/set_language", methods=["POST"])
+@app.route(dev_route("/set_language"), methods=["POST"])
 @track_eater_operation("set_language")
 @token_required
 def set_language_route(user_email):
     return set_language(request=request, user_email=user_email)
 
 
-@app.route("/nickname_update", methods=["POST"])
+@app.route(dev_route("/nickname_update"), methods=["POST"])
 @track_eater_operation("nickname_update")
 @token_required
 def nickname_update(user_email):
     return update_user_nickname(request=request, user_email=user_email)
 
 
-@app.route("/food_health_level", methods=["POST"])
+@app.route(dev_route("/food_health_level"), methods=["POST"])
 @track_eater_operation("food_health_level")
 @token_required
 def get_food_health_level(user_email):
     return food_health_level(request=request, user_email=user_email)
 
 
-@app.route("/metrics")
+@app.route(dev_route("/metrics"))
 def metrics():
     return metrics_endpoint()
 

@@ -1,0 +1,123 @@
+---
+- name: Apply PostgreSQL Custom Resource (DEV)
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - ../vars.yaml
+  tasks:
+    - name: Apply PostgreSQL CRD for DEV
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: "acid.zalan.do/v1"
+          kind: "postgresql"
+          metadata:
+            name: "eater-db-dev"
+            namespace: "eater-dev"
+            labels:
+              team: acid
+          spec:
+            teamId: "acid"
+            postgresql:
+              version: "16"
+            numberOfInstances: 1
+            maintenanceWindows: []
+            volume:
+              size: "5Gi"
+            users:
+              eater_dev: []
+            databases:
+              eater_dev: eater_dev
+            allowedSourceRanges:
+              - 0.0.0.0/32
+            resources:
+              requests:
+                cpu: "50m"
+                memory: "50Mi"
+              limits:
+                cpu: "250m"
+                memory: "250Mi"
+            patroni:
+              initdb:
+                encoding: UTF8
+                data-checksums: "true"
+            podAnnotations: {}
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                        - key: cluster-name
+                          operator: In
+                          values:
+                            - eater-db-dev
+                    topologyKey: kubernetes.io/hostname
+            tolerations:
+              - key: gpu-only
+                operator: Exists
+                effect: NoSchedule
+      register: result
+    - name: Create local directory for eater-postgres-dev
+      ansible.builtin.file:
+        path: /other/eater_postgres_dev
+        state: directory
+        mode: '0777'
+      delegate_to: racoon
+      become: true
+      vars:
+        ansible_become_password: "{{ ansible_become_password_racoon }}"
+    - name: Create eater_postgres_dev PersistentVolume
+      kubernetes.core.k8s:
+        state: present
+        namespace: eater-dev
+        definition:
+          apiVersion: v1
+          kind: PersistentVolume
+          metadata:
+            name: eater-postgres-dev-pvc
+            namespace: eater-dev
+          spec:
+            capacity:
+              storage: 5Gi
+            volumeMode: Filesystem
+            accessModes:
+              - ReadWriteOnce
+            persistentVolumeReclaimPolicy: Recycle
+            local:
+              path: /other/eater_postgres_dev
+            nodeAffinity:
+              required:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/hostname
+                        operator: In
+                        values:
+                          - "racoon"
+    - name: Create eater_postgres_dev PersistentVolume (racoon-gpu)
+      kubernetes.core.k8s:
+        state: present
+        namespace: eater-dev
+        definition:
+          apiVersion: v1
+          kind: PersistentVolume
+          metadata:
+            name: eater-postgres-dev-pvc-gpu
+            namespace: eater-dev
+          spec:
+            capacity:
+              storage: 5Gi
+            volumeMode: Filesystem
+            accessModes:
+              - ReadWriteOnce
+            persistentVolumeReclaimPolicy: Recycle
+            local:
+              path: /other/eater_postgres_dev
+            nodeAffinity:
+              required:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/hostname
+                        operator: In
+                        values:
+                          - "racoon-gpu"

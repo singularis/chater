@@ -36,15 +36,24 @@ class Neo4jConnection:
             if not record or record["test"] != 1:
                 raise Exception("Neo4j connectivity test failed")
 
+    
+    def _get_user_label(self):
+        is_dev = os.getenv("IS_DEV", "false").lower() == "true"
+        return "User_dev" if is_dev else "User"
+
     def add_friend_relationship(self, user_email: str, friend_email: str) -> bool:
         if not self.driver:
             raise Exception("Neo4j driver not initialized")
+        
+        label = self._get_user_label()
 
         with self.driver.session() as session:
             try:
-                query = """
-                MERGE (user:User {email: $user_email})
-                MERGE (friend:User {email: $friend_email})
+                # Using string formatting for label because labels cannot be parameterized in Neo4j
+                # This is safe because label is controlled by our code, not user input
+                query = f"""
+                MERGE (user:{label} {{email: $user_email}})
+                MERGE (friend:{label} {{email: $friend_email}})
                 MERGE (user)-[:FRIEND]->(friend)
                 MERGE (friend)-[:FRIEND]->(user)
                 RETURN user.email as user, friend.email as friend
@@ -63,11 +72,13 @@ class Neo4jConnection:
     def check_friendship_exists(self, user_email: str, friend_email: str) -> bool:
         if not self.driver:
             raise Exception("Neo4j driver not initialized")
+        
+        label = self._get_user_label()
 
         with self.driver.session() as session:
             try:
-                query = """
-                MATCH (user:User {email: $user_email})-[:FRIEND]-(friend:User {email: $friend_email})
+                query = f"""
+                MATCH (user:{label} {{email: $user_email}})-[:FRIEND]-(friend:{label} {{email: $friend_email}})
                 RETURN COUNT(*) as count
                 """
 
@@ -84,11 +95,13 @@ class Neo4jConnection:
     def get_user_friends(self, user_email: str) -> list:
         if not self.driver:
             raise Exception("Neo4j driver not initialized")
+        
+        label = self._get_user_label()
 
         with self.driver.session() as session:
             try:
-                query = """
-                MATCH (user:User {email: $user_email})-[:FRIEND]->(friend:User)
+                query = f"""
+                MATCH (user:{label} {{email: $user_email}})-[:FRIEND]->(friend:{label})
                 RETURN DISTINCT friend.email as friend_email
                 ORDER BY friend.email
                 """

@@ -1,0 +1,35 @@
+---
+- name: "Main file workload configuration for DEV environment"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+- name: Setup chater_ui (dev)
+  import_playbook: ./chater_ui/chater_ui_dev.yaml
+- name: Setup eater (dev)
+  import_playbook: ./eater/eater_anisble_dev.yaml
+- name: Setup eater_user (dev)
+  import_playbook: ./eater_user/eater_user_dev.yaml
+- name: Setup eater-postgres-mcp (dev)
+  import_playbook: ./eater-postgres-mcp/eater-postgres-mcp_dev.yaml
+- name: Setup admin_service (dev)
+  import_playbook: ./admin_service/admin_dev.yaml
+- name: Setup chater_auth (dev)
+  import_playbook: ./chater_auth/chater_auth_dev.yaml
+- name: Setup chater_dlp (dev)
+  import_playbook: ./chater_dlp/chater_dlp_dev.yaml
+- name: Setup creds for DLP (dev)
+  import_playbook: ./dlp-secret-auth/gcp-dlp-service-account.yaml
+- name: Setup chater_gemini (dev)
+  import_playbook: ./chater_gemini/chater_gemini_dev.yaml
+- name: Setup chater-gpr-operator (dev)
+  import_playbook: ./chater-operators/chater-gpt-operator/chater-gpt-operator_dev.yaml
+- name: Setup chater_gpt (dev)
+  import_playbook: ./chater_gpt/chater_gpt_dev.yaml
+- name: Setup chater_vision (dev)
+  import_playbook: ./chater-vision/chater_vision_dev.yaml
+- name: Setup load_test (dev)
+  import_playbook: ./load_test/load_test_dev.yaml
+- name: Setup mcpo-proxy (dev)
+  import_playbook: ./mcpo-proxy/eater-postgres-mcpo-proxy_dev.yaml
+- name: Setup models-processor (dev)
+  import_playbook: ./models_processor/models_processor_dev.yaml

@@ -39,8 +39,12 @@ def _create_producer() -> Producer:
     )
 
 
+from dev_utils import get_topic_name
+
+
 def produce_message(topic: str, message: Dict[str, Any]) -> None:
     producer = _create_producer()
+    topic = get_topic_name(topic)
 
     try:
         producer.produce(

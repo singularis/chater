@@ -8,7 +8,10 @@ from dataclasses import dataclass
 from threading import Event
 from typing import Dict, Iterable, Iterator, Optional
 
+
 from confluent_kafka import Consumer, KafkaError
+
+from dev_utils import get_kafka_group_id
 
 logger = logging.getLogger("models_processor.kafka_consumer")
 
@@ -33,7 +36,7 @@ class KafkaConsumerSettings:
                 "BOOTSTRAP_SERVER environment variable is not set"
             )
 
-        group_id = os.getenv("KAFKA_GROUP_ID", "models-processor")
+        group_id = get_kafka_group_id(os.getenv("KAFKA_GROUP_ID", "models-processor"))
         return cls(
             bootstrap_servers=bootstrap_servers,
             group_id=group_id,

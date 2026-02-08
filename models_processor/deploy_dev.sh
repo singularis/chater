@@ -1,0 +1,5 @@
+#! /bin/bash
+
+docker build -t singularis314/models_processor-dev:0.1 .
+docker push singularis314/models_processor-dev:0.1
+kubectl rollout restart -n models-processor-dev deployment models-processor-dev

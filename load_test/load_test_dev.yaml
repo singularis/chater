@@ -1,0 +1,96 @@
+- name: Deploy Locust load tests for chater-ui (DEV)
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - ../vars.yaml
+
+  tasks:
+    - name: Create load-test-dev Namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: load-test-dev
+    - name: Deploy Locust Deployment (DEV)
+      kubernetes.core.k8s:
+        state: present
+        namespace: load-test-dev
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: locust-dev
+            namespace: load-test-dev
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: locust-dev
+            template:
+              metadata:
+                labels:
+                  app: locust-dev
+                annotations:
+                  co.elastic.logs/enabled: "true"
+              spec:
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: kubernetes.io/hostname
+                              operator: In
+                              values:
+                                - racoon-gpu
+                tolerations:
+                  - key: "gpu-only"
+                    operator: "Equal"
+                    value: "true"
+                    effect: "NoSchedule"
+                containers:
+                  - name: locust-dev
+                    image: docker.io/singularis314/locust-chater-dev:0.1
+                    imagePullPolicy: Always
+                    ports:
+                      - containerPort: 8089
+                        name: web
+                    env:
+                      - name: IS_DEV
+                        value: "true"
+                      - name: TEST_USER_TOKEN
+                        value: "{{ vars.TEST_USER_TOKEN }}"
+                      - name: TEST_USER_EMAIL
+                        value: "{{ vars.TEST_USER_EMAIL }}"
+                      - name: TEST_AUTH_PROVIDER
+                        value: "{{ vars.TEST_AUTH_PROVIDER }}"
+                      - name: TEST_AUTH_EMAIL
+                        value: "{{ vars.TEST_AUTH_EMAIL }}"
+                      - name: TEST_AUTH_NAME
+                        value: "{{ vars.TEST_AUTH_NAME }}"
+                      - name: TEST_AUTH_PROFILE_URL
+                        value: "{{ vars.TEST_AUTH_PROFILE_URL }}"
+                      - name: TEST_AUTH_TOKEN
+                        value: "{{ vars.TEST_AUTH_TOKEN }}"
+                      - name: TARGET_HOST
+                        value: "{{ vars.EATER_TARGET_HOST_DEV }}"
+    - name: Create Locust Service (DEV - LoadBalancer)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: locust-dev
+            namespace: load-test-dev
+          spec:
+            type: LoadBalancer
+            selector:
+              app: locust-dev
+            loadBalancerIP: "{{ vars.DEV.LOAD_TEST_LB_IP }}"
+            ports:
+              - name: web
+                port: 8089
+                targetPort: 8089

@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 from confluent_kafka import KafkaException, Producer
 from logging_config import setup_logging
+from dev_utils import get_topic_name
 
 setup_logging("kafka_producer.log")
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ def delivery_report(err, msg):
 
 
 def produce_message(producer, topic, message, ensure_user_email=True):
+    topic = get_topic_name(topic)
     if not isinstance(message, dict):
         raise TypeError("message must be a dictionary")
 
@@ -90,7 +92,7 @@ def produce_message(producer, topic, message, ensure_user_email=True):
             message["value"] = {}
 
         # Debug logging for auth topic
-        if topic == "auth_requires_token":
+        if topic in ("auth_requires_token", "auth_requires_token_dev"):
             logger.info(f"AUTH DEBUG - Message before user_email check: {message}")
             logger.info(
                 f"AUTH DEBUG - Message value keys: {list(message.get('value', {}).keys())}"

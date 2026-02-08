@@ -2,6 +2,7 @@ import json
 import logging
 import os
 
+from dev_utils import get_topics_list, get_topic_name, is_dev_environment
 from kafka_consumer import consume_messages
 from kafka_producer import produce_message
 from logging_config import setup_logging
@@ -91,7 +92,10 @@ def analyze_photo(prompt, photo_base64):
 
 
 def process_messages():
-    topics = ["gpt-send", "eater-send-photo"]
+    base_topics = ["gpt-send", "eater-send-photo"]
+    topics = get_topics_list(base_topics)
+    if is_dev_environment():
+        logger.info("Running in DEV environment - using _dev topic suffix")
     logger.info(f"Starting message processing with topics: {topics}")
     while True:
         for message, consumer in consume_messages(topics):
@@ -102,7 +106,7 @@ def process_messages():
                 value_dict = json.loads(value)
                 actual_value = value_dict["value"]
 
-                if topic == "gpt-send":
+                if topic == get_topic_name("gpt-send"):
                     context = actual_value.get("context")
                     question = actual_value.get("question")
                     response_value = gpt_request(question, context)
@@ -113,7 +117,7 @@ def process_messages():
                         f"Processed GPT message and sent to Kafka: {kafka_message}"
                     )
 
-                elif topic == "eater-send-photo":
+                elif topic == get_topic_name("eater-send-photo"):
                     logger.debug("Received message on 'eater-send-photo'.")
                     prompt = actual_value.get("prompt")
                     photo_base64 = actual_value.get("photo")

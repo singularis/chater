@@ -10,6 +10,7 @@ from fastapi import (FastAPI, HTTPException, Request, WebSocket,
                      WebSocketDisconnect)
 from fastapi.responses import Response
 from kafka_producer import produce_message
+from dev_utils import get_topic_name
 from logging_config import setup_logging
 from neo4j_connection import neo4j_connection
 from postgres import autocomplete_query, database, get_food_record_by_time, ensure_nickname_column, update_nickname, get_nickname
@@ -312,7 +313,7 @@ async def share_food_endpoint(request: Request, user_email: str):
             },
         }
         # Send friend payload
-        produce_message(topic="photo-analysis-response", message=friend_payload)
+        produce_message(topic=get_topic_name("photo-analysis-response"), message=friend_payload)
 
         # Modify original record after sending friend message
         remaining_percentage = 100 - percentage
@@ -325,7 +326,7 @@ async def share_food_endpoint(request: Request, user_email: str):
             },
         }
         # Send modify payload for remaining percentage
-        produce_message(topic="modify_food_record", message=modify_payload)
+        produce_message(topic=get_topic_name("modify_food_record"), message=modify_payload)
 
         response = share_food_pb2.ShareFoodResponse()
         response.success = True

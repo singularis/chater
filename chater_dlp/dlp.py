@@ -12,6 +12,7 @@ from google.cloud.dlp_v2.types import (DeidentifyConfig,
 from kafka_consumer import consume_messages
 from kafka_producer import produce_message
 from logging_config import setup_logging
+from dev_utils import get_topics_list, is_dev_environment
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,10 @@ def inspect_and_redact(text: str) -> str:
 
 
 def process_messages():
-    topics = ["dlp-source"]
+    base_topics = ["dlp-source"]
+    topics = get_topics_list(base_topics)
+    if is_dev_environment():
+        logger.info("Running in DEV environment - using _dev topic suffix")
     logger.info(f"Starting message processing with topics: {topics}")
     while True:
         for message, consumer in consume_messages(topics):

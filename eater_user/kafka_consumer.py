@@ -5,6 +5,8 @@ import time as time_module
 
 from confluent_kafka import Consumer, KafkaError
 
+from dev_utils import get_kafka_group_id
+
 logger = logging.getLogger("kafka_consumer")
 
 
@@ -69,7 +71,7 @@ def consume_messages(topics, expected_user_email=None):
     consumer = Consumer(
         {
             "bootstrap.servers": os.getenv("BOOTSTRAP_SERVER"),
-            "group.id": "eater",
+            "group.id": get_kafka_group_id("eater"),
             "auto.offset.reset": "latest",
             "enable.auto.commit": False,
             "max.poll.interval.ms": 300000,

@@ -73,9 +73,11 @@ def create_chater_gpt(spec, **kwargs):
             raise
 
     # Define the container using env vars from the Secret and CR spec
+    is_dev = str(spec.get("isDev", "false")).lower() == "true"
+    image_name = "docker.io/singularis314/chater-gpt-dev:0.3" if is_dev else "docker.io/singularis314/chater-gpt:0.3"
     container = client.V1Container(
         name="chater-gpt",
-        image="singularis314/chater-gpt:0.3",
+        image=image_name,
         image_pull_policy="Always",
         env=[
             client.V1EnvVar(
@@ -97,6 +99,7 @@ def create_chater_gpt(spec, **kwargs):
             client.V1EnvVar(name="BOOTSTRAP_SERVER", value=bootstrap_server),
             client.V1EnvVar(name="MODEL", value=model),
             client.V1EnvVar(name="VISION_MODEL", value=vision_model),
+            client.V1EnvVar(name="IS_DEV", value=str(spec.get("isDev", "false")).lower()),
         ],
     )
 
@@ -163,6 +166,8 @@ def update_chater_gpt(spec, **kwargs):
     secret_key_b64 = spec.get("secretKey")
     replicas = spec.get("replicas", 1)
     affinity = spec.get("affinity")
+    is_dev = str(spec.get("isDev", "false")).lower() == "true"
+    image_name = "docker.io/singularis314/chater-gpt-dev:0.3" if is_dev else "docker.io/singularis314/chater-gpt:0.3"
 
     config.load_incluster_config()
     api_client = client.ApiClient()
@@ -195,6 +200,7 @@ def update_chater_gpt(spec, **kwargs):
                     "containers": [
                         {
                             "name": "chater-gpt",
+                            "image": image_name,
                             "env": [
                                 {
                                     "name": "OPENAI_API_KEY",
@@ -217,6 +223,10 @@ def update_chater_gpt(spec, **kwargs):
                                 {"name": "BOOTSTRAP_SERVER", "value": bootstrap_server},
                                 {"name": "MODEL", "value": model},
                                 {"name": "VISION_MODEL", "value": vision_model},
+                                {
+                                    "name": "IS_DEV",
+                                    "value": str(spec.get("isDev", "false")).lower(),
+                                },
                             ],
                         }
                     ]
@@ -252,6 +262,8 @@ def resume_chater_gpt(spec, **kwargs):
     secret_key_b64 = spec.get("secretKey")
     replicas = spec.get("replicas", 1)
     affinity = spec.get("affinity")
+    is_dev = str(spec.get("isDev", "false")).lower() == "true"
+    image_name = "docker.io/singularis314/chater-gpt-dev:0.3" if is_dev else "docker.io/singularis314/chater-gpt:0.3"
 
     config.load_incluster_config()
     api_client = client.ApiClient()
@@ -290,6 +302,7 @@ def resume_chater_gpt(spec, **kwargs):
                     "containers": [
                         {
                             "name": "chater-gpt",
+                            "image": image_name,
                             "env": [
                                 {
                                     "name": "OPENAI_API_KEY",
@@ -312,6 +325,10 @@ def resume_chater_gpt(spec, **kwargs):
                                 {"name": "BOOTSTRAP_SERVER", "value": bootstrap_server},
                                 {"name": "MODEL", "value": model},
                                 {"name": "VISION_MODEL", "value": vision_model},
+                                {
+                                    "name": "IS_DEV",
+                                    "value": str(spec.get("isDev", "false")).lower(),
+                                },
                             ],
                         }
                     ]
@@ -331,7 +348,7 @@ def resume_chater_gpt(spec, **kwargs):
             # Create Deployment from scratch if missing
             container = client.V1Container(
                 name="chater-gpt",
-                image="singularis314/chater-gpt:0.3",
+                image=image_name,
                 image_pull_policy="Always",
                 env=[
                     client.V1EnvVar(
@@ -353,6 +370,9 @@ def resume_chater_gpt(spec, **kwargs):
                     client.V1EnvVar(name="BOOTSTRAP_SERVER", value=bootstrap_server),
                     client.V1EnvVar(name="MODEL", value=model),
                     client.V1EnvVar(name="VISION_MODEL", value=vision_model),
+                    client.V1EnvVar(
+                        name="IS_DEV", value=str(spec.get("isDev", "false")).lower()
+                    ),
                 ],
             )
             pod_spec = client.V1PodSpec(containers=[container])

@@ -643,6 +643,11 @@ graph TB
         OpenAI[☁️ OpenAI API<br/>GPT Models]
         OllamaLocal[🏠 Ollama<br/>Local LLM Runtime<br/>Port: 11434<br/>Vision & Text]
     end
+
+    subgraph "MCP Services Layer"
+        MCPPostgres[🔌 eater-postgres-mcp<br/>MCP Server for Caller]
+        MCPOProxy[Mw mcpo-proxy<br/>OpenAPI Proxy<br/>Port: 8001]
+    end
     
     %% ============ USER INTERACTIONS ============
     User -->|HTTP POST<br/>/eater_receive_photo| WebUI

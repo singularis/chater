@@ -1,0 +1,92 @@
+- name: Deploy Kubernetes objects for eater application (DEV)
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - ../vars.yaml
+
+  tasks:
+    - name: Create eater-dev Namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: eater-dev
+    - name: Deploy eater-dev Deployment
+      kubernetes.core.k8s:
+        state: present
+        namespace: eater-dev
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: eater-dev
+            namespace: eater-dev
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: eater-dev
+            template:
+              metadata:
+                labels:
+                  app: eater-dev
+                annotations:
+                  co.elastic.logs/enabled: "true"
+              spec:
+                initContainers:
+                  - name: eater-init-db
+                    imagePullPolicy: Always
+                    image: docker.io/singularis314/eater-init-dev:0.1
+                    env:
+                      - name: IS_DEV
+                        value: "true"
+                      - name: POSTGRES_USER
+                        value: "eater_dev"
+                      - name: POSTGRES_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: "eater-dev.eater-db-dev.credentials.postgresql.acid.zalan.do"
+                            key: password
+                      - name: POSTGRES_DB
+                        value: "eater_dev"
+                      - name: POSTGRES_HOST
+                        value: "eater-db-dev.eater-dev.svc.cluster.local"
+                containers:
+                  - name: eater-dev
+                    image: docker.io/singularis314/eater-dev:0.1
+                    imagePullPolicy: Always
+                    env:
+                      - name: IS_DEV
+                        value: "true"
+                      - name: BOOTSTRAP_SERVER
+                        value: "{{ vars.BOOTSTRAP_SERVER }}"
+                      - name: POSTGRES_USER
+                        value: "eater_dev"
+                      - name: POSTGRES_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: "eater-dev.eater-db-dev.credentials.postgresql.acid.zalan.do"
+                            key: password
+                      - name: POSTGRES_DB
+                        value: "eater_dev"
+                      - name: POSTGRES_HOST
+                        value: "eater-db-dev.eater-dev.svc.cluster.local"
+                      - name: LOG_LEVEL
+                        value: "{{ vars.LOG_LEVEL }}"
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: kubernetes.io/hostname
+                              operator: In
+                              values:
+                                - racoon-gpu
+                tolerations:
+                  - key: "gpu-only"
+                    operator: "Equal"
+                    value: "true"
+                    effect: "NoSchedule"

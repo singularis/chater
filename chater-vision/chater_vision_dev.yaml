@@ -1,0 +1,82 @@
+- name: Deploy Kubernetes objects for vision application (DEV)
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - ../vars.yaml
+
+  tasks:
+    - name: Create chater-vision-dev Namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: chater-vision-dev
+    - name: Deploy chater-vision-dev Deployment
+      kubernetes.core.k8s:
+        state: present
+        namespace: chater-vision-dev
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: chater-vision-dev
+            namespace: chater-vision-dev
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: chater-vision-dev
+            template:
+              metadata:
+                labels:
+                  app: chater-vision-dev
+                annotations:
+                  co.elastic.logs/enabled: "true"
+              spec:
+                containers:
+                  - name: chater-vision-dev
+                    image: docker.io/singularis314/chater-vision-dev:0.1
+                    imagePullPolicy: Always
+                    env:
+                      - name: IS_DEV
+                        value: "true"
+                      - name: VISION_API_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: chater-vision-dev
+                            key: VISION_API_KEY
+                      - name: BOOTSTRAP_SERVERS
+                        value: "{{ vars.BOOTSTRAP_SERVER }}"
+                      - name: LOG_LEVEL
+                        value: "{{ vars.LOG_LEVEL }}"
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: kubernetes.io/hostname
+                              operator: In
+                              values:
+                                - racoon-gpu
+                tolerations:
+                  - key: "gpu-only"
+                    operator: "Equal"
+                    value: "true"
+                    effect: "NoSchedule"
+    - name: Create secret for environment variables
+      kubernetes.core.k8s:
+        state: present
+        namespace: chater-vision-dev
+        kind: Secret
+        name: chater-vision-dev
+        resource_definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: chater-vision-dev
+            namespace: chater-vision-dev
+          data:
+            VISION_API_KEY: "{{ vars.GEMINI_API_KEY | b64encode }}"

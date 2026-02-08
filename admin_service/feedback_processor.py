@@ -3,6 +3,7 @@ import logging
 
 from kafka_consumer import consume_messages, create_consumer
 from postgres import create_feedback_table, save_feedback_data
+from dev_utils import get_topics_list, is_dev_environment
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,9 @@ def process_feedback_messages():
         logger.error(f"Failed to initialize database: {e}")
         raise
 
-    topics = ["feedback"]
+    topics = get_topics_list(["feedback"])
+    if is_dev_environment():
+        logger.info("Running in DEV environment - using _dev topic suffix")
     consumer = create_consumer(topics)
 
     try:
