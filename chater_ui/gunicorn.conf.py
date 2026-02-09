@@ -11,7 +11,7 @@ backlog = 2048
 workers = min(4, multiprocessing.cpu_count() * 2 + 1)
 worker_class = "sync"
 worker_connections = 1000
-timeout = 90
+timeout = 60
 graceful_timeout = 30
 keepalive = 2
 

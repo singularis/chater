@@ -145,3 +145,119 @@ async def get_food_record_by_time(time: int, user_email: str):
         }
     except Exception:
         return None
+
+
+# MARK: - Chess Games Functions
+
+
+async def record_chess_game(player_email: str, opponent_email: str, result: str, timestamp: int):
+    """
+    Record a chess game for both players
+    result: "win", "loss", or "draw"
+    """
+    try:
+        # Record game for player
+        query_player = """
+        INSERT INTO chess_games (player_email, opponent_email, result, timestamp)
+        VALUES (:player_email, :opponent_email, :result, :timestamp)
+        """
+        await database.execute(query_player, values={
+            "player_email": player_email,
+            "opponent_email": opponent_email,
+            "result": result,
+            "timestamp": timestamp
+        })
+        
+        # Record mirror game for opponent
+        opponent_result = "loss" if result == "win" else ("win" if result == "loss" else "draw")
+        query_opponent = """
+        INSERT INTO chess_games (player_email, opponent_email, result, timestamp)
+        VALUES (:player_email, :opponent_email, :result, :timestamp)
+        """
+        await database.execute(query_opponent, values={
+            "player_email": opponent_email,
+            "opponent_email": player_email,
+            "result": opponent_result,
+            "timestamp": timestamp
+        })
+        
+        return True
+    except Exception:
+        return False
+
+
+async def get_chess_stats(user_email: str, opponent_email: str = None):
+    """Get chess statistics for a user against specific opponent or overall"""
+    try:
+        if opponent_email:
+            # Get stats against specific opponent
+            query = """
+            SELECT 
+                COUNT(*) FILTER (WHERE result = 'win') as wins,
+                COUNT(*) FILTER (WHERE result = 'loss') as losses,
+                COUNT(*) FILTER (WHERE result = 'draw') as draws,
+                MAX(timestamp) as last_game_timestamp
+            FROM chess_games
+            WHERE player_email = :user_email AND opponent_email = :opponent_email
+            """
+            row = await database.fetch_one(query, values={
+                "user_email": user_email,
+                "opponent_email": opponent_email
+            })
+        else:
+            # Get overall stats (last opponent)
+            query_last = """
+            SELECT opponent_email, timestamp
+            FROM chess_games
+            WHERE player_email = :user_email
+            ORDER BY timestamp DESC
+            LIMIT 1
+            """
+            last_game = await database.fetch_one(query_last, values={"user_email": user_email})
+            
+            if not last_game:
+                return None
+            
+            opponent_email = last_game["opponent_email"]
+            
+            # Get stats against last opponent
+            query = """
+            SELECT 
+                COUNT(*) FILTER (WHERE result = 'win') as wins,
+                COUNT(*) FILTER (WHERE result = 'loss') as losses,
+                COUNT(*) FILTER (WHERE result = 'draw') as draws,
+                MAX(timestamp) as last_game_timestamp
+            FROM chess_games
+            WHERE player_email = :user_email AND opponent_email = :opponent_email
+            """
+            row = await database.fetch_one(query, values={
+                "user_email": user_email,
+                "opponent_email": opponent_email
+            })
+        
+        if row:
+            wins = row["wins"] or 0
+            losses = row["losses"] or 0
+            
+            # Get opponent nickname
+            opponent_nickname = await get_nickname(opponent_email)
+            opponent_name = opponent_nickname if opponent_nickname else opponent_email
+            
+            # Format last game date
+            import datetime
+            last_timestamp = row["last_game_timestamp"]
+            last_date = ""
+            if last_timestamp:
+                dt = datetime.datetime.fromtimestamp(last_timestamp / 1000, tz=datetime.timezone.utc)
+                last_date = dt.strftime("%Y-%m-%d")
+            
+            return {
+                "score": f"{wins}:{losses}",
+                "opponent_name": opponent_name,
+                "opponent_email": opponent_email,
+                "last_game_date": last_date
+            }
+        
+        return None
+    except Exception:
+        return None

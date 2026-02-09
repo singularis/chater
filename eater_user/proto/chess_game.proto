@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package Eater;
+
+message RecordChessGameRequest {
+  string player_email = 1;        // email of the player recording
+  string opponent_email = 2;      // email of the opponent
+  string result = 3;              // "win", "loss", or "draw"
+  int64 timestamp = 4;            // when the game was played
+}
+
+message RecordChessGameResponse {
+  bool success = 1;
+  string player_score = 2;        // e.g., "6:5" for player
+  string opponent_score = 3;      // e.g., "5:6" for opponent
+}
+
+message GetChessStatsRequest {
+  string user_email = 1;          // whose stats to fetch
+}
+
+message GetChessStatsResponse {
+  string score = 1;               // e.g., "6:5"
+  string opponent_name = 2;       // nickname or email of last opponent
+  string last_game_date = 3;      // "2026-02-02"
+}

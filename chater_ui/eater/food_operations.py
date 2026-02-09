@@ -138,17 +138,32 @@ def modify_food_record(request, user_email):
         modify_food_request.ParseFromString(proto_data)
         time = modify_food_request.time
         percentage = modify_food_request.percentage
+        is_try_again = modify_food_request.is_try_again
+        image_id = modify_food_request.image_id
+        added_sugar_tsp = modify_food_request.added_sugar_tsp
+        manual_food_name = modify_food_request.manual_food_name
+        manual_insight = modify_food_request.manual_insight
+        manual_components = list(modify_food_request.manual_components)
+        
         logger.debug(
-            "Extracted modify payload for user %s: time=%s percentage=%s",
+            "Extracted modify payload for user %s: time=%s percentage=%s is_try_again=%s added_sugar_tsp=%s",
             user_email,
             time,
             percentage,
+            is_try_again,
+            added_sugar_tsp,
         )
 
         payload = {
             "time": time,
             "user_email": user_email,
             "percentage": percentage,
+            "is_try_again": is_try_again,
+            "image_id": image_id,
+            "added_sugar_tsp": added_sugar_tsp,
+            "manual_food_name": manual_food_name,
+            "manual_insight": manual_insight,
+            "manual_components": manual_components,
         }
         message_id, error = _dispatch_kafka_request(
             topic="modify_food_record",
