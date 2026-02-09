@@ -29,7 +29,8 @@ from eater.eater import (alcohol_latest, alcohol_range, delete_food_record,
                          get_recommendations, manual_weight_record,
                          modify_food_record_data, set_language)
 from eater.feedback import submit_feedback_request
-from eater.user_mgmt import update_user_nickname
+from eater.user_mgmt import (add_friend_request, get_friends_request,
+                           share_food_request, update_user_nickname)
 
 from .metrics import (metrics_endpoint, record_http_metrics,
                       track_eater_operation, track_operation)
@@ -60,7 +61,7 @@ app.config.update(
     SESSION_REDIS=redis_client,
     SESSION_PERMANENT=False,
     SESSION_USE_SIGNER=True,
-    SESSION_KEY_PREFIX="chater_ui:",
+    SESSION_KEY_PREFIX="_dev:chater_ui:" if IS_DEV else "chater_ui:",
     # Security headers for personal app
     SESSION_COOKIE_SECURE=(
         True if os.getenv("HTTPS_ENABLED", "false").lower() == "true" else False
@@ -387,6 +388,46 @@ def get_food_health_level(user_email):
     return food_health_level(request=request, user_email=user_email)
 
 
+@app.route(dev_route("/autocomplete/addfriend"), methods=["POST"])
+@track_eater_operation("add_friend")
+@token_required
+def add_friend_route(user_email):
+    return add_friend_request(request=request, user_email=user_email)
+
+
+@app.route(dev_route("/autocomplete/getfriend"), methods=["GET"])
+@track_eater_operation("get_friend")
+@token_required
+def get_friend_route(user_email):
+    return get_friends_request(request=request, user_email=user_email)
+
+
+@app.route(dev_route("/autocomplete/sharefood"), methods=["POST"])
+@track_eater_operation("share_food")
+@token_required
+def share_food_route(user_email):
+    return share_food_request(request=request, user_email=user_email)
+
+
+@app.route(dev_route("/autocomplete"), methods=["GET"])
+def autocomplete_info():
+    """
+    Returns WebSocket endpoint information.
+    This endpoint is NOT the WebSocket itself - it provides connection details.
+    """
+    websocket_url = os.getenv(
+        "EATER_USERS_WS_URL",
+        "ws://192.168.0.118/autocomplete" if IS_DEV else "ws://eater-users-service/autocomplete"
+    )
+    return jsonify({
+        "error": "WebSocket endpoint not available on this service",
+        "message": "Please connect to the WebSocket at the eater-users service",
+        "websocket_url": websocket_url,
+        "note": "Use WebSocket protocol (ws://) not HTTP"
+    }), 400
+
+
+@app.route("/metrics")
 @app.route(dev_route("/metrics"))
 def metrics():
     return metrics_endpoint()

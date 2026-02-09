@@ -20,7 +20,7 @@ def set_language_handler(request, user_email):
         set_user_language(user_email, language_code)
         try:
             common.redis_client.setex(
-                f"user_language:{user_email}", 7 * 24 * 3600, language_code
+                f"{common.KEY_PREFIX}user_language:{user_email}", 7 * 24 * 3600, language_code
             )
         except Exception:
             pass

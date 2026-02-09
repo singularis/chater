@@ -13,6 +13,9 @@ from eater.proto import get_recomendation_pb2
 logger = logging.getLogger(__name__)
 redis_client = redis.StrictRedis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
 
+IS_DEV = os.getenv("IS_DEV", "false").lower() == "true"
+KEY_PREFIX = "_dev:" if IS_DEV else ""
+
 # Cache expiry: 12 hours (in seconds)
 RECOMMENDATION_CACHE_TTL = 12 * 60 * 60
 
@@ -20,7 +23,7 @@ RECOMMENDATION_CACHE_TTL = 12 * 60 * 60
 def _get_recommendation_cache_key(user_email: str) -> str:
     """Generate Redis cache key for user recommendations (daily)."""
     current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    return f"recommendation_cache:{user_email}:{current_date}"
+    return f"{KEY_PREFIX}recommendation_cache:{user_email}:{current_date}"
 
 
 def get_cached_recommendation(user_email: str) -> bytes | None:
@@ -36,7 +39,7 @@ def get_cached_recommendation(user_email: str) -> bytes | None:
             return cached_data
         logger.debug("Cache miss for recommendation, user: %s", user_email)
         return None
-    except Exception:
+    except Exception as e:
         logger.error(
             "Error reading recommendation cache for user %s: %s", user_email, e
         )
@@ -53,7 +56,7 @@ def cache_recommendation(user_email: str, recommendation_data: bytes) -> bool:
         redis_client.setex(cache_key, RECOMMENDATION_CACHE_TTL, recommendation_data)
         logger.info("Cached recommendation for user: %s", user_email)
         return True
-    except Exception:
+    except Exception as e:
         logger.error("Error caching recommendation for user %s: %s", user_email, e)
         return False
 
@@ -68,7 +71,7 @@ def invalidate_recommendation_cache(user_email: str) -> bool:
         redis_client.delete(cache_key)
         logger.debug("Invalidated recommendation cache for user: %s", user_email)
         return True
-    except Exception:
+    except Exception as e:
         logger.error(
             "Error invalidating recommendation cache for user %s: %s", user_email, e
         )
@@ -133,7 +136,7 @@ def _generate_and_cache_recommendation_background(user_email: str):
                 "for user %s",
                 user_email,
             )
-    except Exception:
+    except Exception as e:
         logger.exception(
             "Background recommendation generation failed for user %s: %s", user_email, e
         )

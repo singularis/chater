@@ -50,6 +50,8 @@
                             minimum: 1
                           isDev:
                             type: string
+                          logLevel:
+                            type: string
                           affinity:
                             type: object
                             x-kubernetes-preserve-unknown-fields: true

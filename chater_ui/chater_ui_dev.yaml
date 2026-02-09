@@ -119,6 +119,8 @@
                         value: "{{ vars.MODELS_PROCESSOR.DEFAULT_MODEL_TIER }}"
                       - name: LOG_LEVEL
                         value: "{{ vars.LOG_LEVEL }}"
+                      - name: AUTOCOMPLETE_SERVICE_URL
+                        value: "http://eater-users-dev-service"
                 affinity:
                   nodeAffinity:
                     requiredDuringSchedulingIgnoredDuringExecution:

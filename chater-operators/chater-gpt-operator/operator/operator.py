@@ -21,6 +21,7 @@ def create_chater_gpt(spec, **kwargs):
     secret_key_b64 = spec.get("secretKey")
     replicas = spec.get("replicas", 1)
     affinity = spec.get("affinity")
+    log_level = spec.get("logLevel", "WARNING")
 
     config.load_incluster_config()
     api_client = client.ApiClient()
@@ -100,6 +101,7 @@ def create_chater_gpt(spec, **kwargs):
             client.V1EnvVar(name="MODEL", value=model),
             client.V1EnvVar(name="VISION_MODEL", value=vision_model),
             client.V1EnvVar(name="IS_DEV", value=str(spec.get("isDev", "false")).lower()),
+            client.V1EnvVar(name="LOG_LEVEL", value=log_level),
         ],
     )
 
@@ -168,6 +170,7 @@ def update_chater_gpt(spec, **kwargs):
     affinity = spec.get("affinity")
     is_dev = str(spec.get("isDev", "false")).lower() == "true"
     image_name = "docker.io/singularis314/chater-gpt-dev:0.3" if is_dev else "docker.io/singularis314/chater-gpt:0.3"
+    log_level = spec.get("logLevel", "WARNING")
 
     config.load_incluster_config()
     api_client = client.ApiClient()
@@ -227,6 +230,7 @@ def update_chater_gpt(spec, **kwargs):
                                     "name": "IS_DEV",
                                     "value": str(spec.get("isDev", "false")).lower(),
                                 },
+                                {"name": "LOG_LEVEL", "value": log_level},
                             ],
                         }
                     ]
@@ -264,6 +268,7 @@ def resume_chater_gpt(spec, **kwargs):
     affinity = spec.get("affinity")
     is_dev = str(spec.get("isDev", "false")).lower() == "true"
     image_name = "docker.io/singularis314/chater-gpt-dev:0.3" if is_dev else "docker.io/singularis314/chater-gpt:0.3"
+    log_level = spec.get("logLevel", "WARNING")
 
     config.load_incluster_config()
     api_client = client.ApiClient()
@@ -329,6 +334,7 @@ def resume_chater_gpt(spec, **kwargs):
                                     "name": "IS_DEV",
                                     "value": str(spec.get("isDev", "false")).lower(),
                                 },
+                                {"name": "LOG_LEVEL", "value": log_level},
                             ],
                         }
                     ]
@@ -373,6 +379,7 @@ def resume_chater_gpt(spec, **kwargs):
                     client.V1EnvVar(
                         name="IS_DEV", value=str(spec.get("isDev", "false")).lower()
                     ),
+                    client.V1EnvVar(name="LOG_LEVEL", value=log_level),
                 ],
             )
             pod_spec = client.V1PodSpec(containers=[container])

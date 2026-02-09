@@ -4,7 +4,8 @@ import threading
 
 from app.trnd_processor import (_generate_and_cache_recommendation_background,
                                 cache_recommendation,
-                                get_cached_recommendation)
+                                get_cached_recommendation,
+                                invalidate_recommendation_cache)
 from local_models_helper import LocalModelService
 
 from .food_operations import (delete_food, get_alcohol_latest,
@@ -131,7 +132,18 @@ def eater_custom_date(request, user_email):
 def delete_food_record(request, user_email):
     logger.info("Deleting food entry", extra={"user_email": user_email})
     try:
-        return delete_food(request=request, user_email=user_email)
+        result = delete_food(request=request, user_email=user_email)
+        # Invalidate recommendation cache on successful delete
+        is_success = False
+        if isinstance(result, tuple) and result[1] == 200:
+            is_success = True
+        elif result == "Success":
+            is_success = True
+        
+        if is_success:
+            invalidate_recommendation_cache(user_email)
+            
+        return result
     except Exception:
         logger.exception("Failed to delete food entry for user %s", user_email)
         return "Failed"
@@ -140,7 +152,18 @@ def delete_food_record(request, user_email):
 def modify_food_record_data(request, user_email):
     logger.info("Updating food record", extra={"user_email": user_email})
     try:
-        return modify_food_record(request=request, user_email=user_email)
+        result = modify_food_record(request=request, user_email=user_email)
+        # Invalidate recommendation cache on successful update
+        is_success = False
+        if isinstance(result, tuple) and result[1] == 200:
+            is_success = True
+        elif result == "Success":
+            is_success = True
+            
+        if is_success:
+            invalidate_recommendation_cache(user_email)
+            
+        return result
     except Exception:
         logger.exception("Failed to update food record for user %s", user_email)
         return "Failed"

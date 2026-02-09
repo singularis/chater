@@ -47,7 +47,7 @@ class DishesDay(Base):
     __table_args__ = {"schema": "public"}
 
     time = Column(BigInteger, primary_key=True)
-    date = Column(String)
+    date = Column(Date)
     dish_name = Column(String)
     estimated_avg_calories = Column(Integer)
     ingredients = Column(ARRAY(String))
@@ -61,9 +61,10 @@ class DishesDay(Base):
 
 class TotalForDay(Base):
     __tablename__ = "total_for_day"
-    __table_args__ = (PrimaryKeyConstraint("today", "user_email"), {"schema": "public"})
+    __table_args__ = (PrimaryKeyConstraint("date", "user_email"), {"schema": "public"})
 
-    today = Column(String)
+    date = Column(Date)
+    today = Column(Date)
     total_calories = Column(Integer)
     ingredients = Column(ARRAY(String))
     dishes_of_day = Column(ARRAY(String))
@@ -280,6 +281,7 @@ def write_to_dish_day(
 
             # Prepare data for total_for_day table
             total_for_day = TotalForDay(
+                date=recalc_date,
                 today=recalc_date,
                 total_calories=total_calories,
                 ingredients=all_ingredients,
@@ -292,6 +294,7 @@ def write_to_dish_day(
             # Check if there's an existing entry for today
             existing_entry = (
                 session.query(TotalForDay)
+                .filter(TotalForDay.date == recalc_date)
                 .filter(TotalForDay.today == recalc_date)
                 .filter(TotalForDay.user_email == user_email)
                 .first()
