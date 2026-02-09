@@ -12,7 +12,6 @@ PyJWT
 pyyaml
 protobuf
 pillow
-numpy
 flask_session
 redis
 gunicorn

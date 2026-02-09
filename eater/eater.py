@@ -8,8 +8,8 @@ from kafka_producer import produce_message
 from logging_config import setup_logging
 from postgres import (AlcoholConsumption, AlcoholForDay, delete_food,
                       get_alcohol_events_in_range, get_custom_date_dishes,
-                      get_chess_stats_sync, get_food_health_level, get_today_dishes,
-                      modify_food, record_chess_game)
+                      get_all_chess_data_sync, get_chess_stats_sync, get_food_health_level,
+                      get_today_dishes, modify_food, record_chess_game)
 from process_gpt import get_recommendation, process_food, process_weight
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,8 @@ def process_messages():
         "get_alcohol_range",
         "get_food_health_level",
         "record_chess_game",
+        "get_chess_stats",
+        "get_all_chess_data",
     ]
     logger.info(f"Starting message processing with topics: {topics}")
     while True:
@@ -334,6 +336,35 @@ def process_messages():
                                     },
                                 },
                             )
+                elif message.topic() == "get_chess_stats":
+                    req = value_dict.get("value", {})
+                    opponent_email = (req.get("opponent_email") or "").strip() or None
+                    stats = get_chess_stats_sync(user_email, opponent_email)
+                    produce_message(
+                        topic="get_chess_stats_response",
+                        message={
+                            "key": message_key,
+                            "value": {
+                                "user_email": user_email,
+                                "score": (stats or {}).get("score", "0:0"),
+                                "opponent_name": (stats or {}).get("opponent_name", ""),
+                                "last_game_date": (stats or {}).get("last_game_date", ""),
+                            },
+                        },
+                    )
+                elif message.topic() == "get_all_chess_data":
+                    data = get_all_chess_data_sync(user_email)
+                    produce_message(
+                        topic="get_all_chess_data_response",
+                        message={
+                            "key": message_key,
+                            "value": {
+                                "user_email": user_email,
+                                "total_wins": (data or {}).get("total_wins", 0),
+                                "opponents": (data or {}).get("opponents", {}),
+                            },
+                        },
+                    )
             except Exception as e:
                 logger.error(
                     f"Failed to process message for user {user_email}: {e}, message {value_dict}"

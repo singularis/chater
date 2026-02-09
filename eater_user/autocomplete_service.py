@@ -18,10 +18,7 @@ from postgres import (autocomplete_query, database, get_food_record_by_time,
 from proto import add_friend_pb2, get_friends_pb2, share_food_pb2
 from starlette.websockets import WebSocketState
 
-from chess_routes import router as chess_router
-
 app = FastAPI(title="Autocomplete Service", version="1.0.0")
-app.include_router(chess_router)
 
 setup_logging("autocomplete_service.log")
 logger = logging.getLogger("autocomplete_service")

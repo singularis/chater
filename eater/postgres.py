@@ -896,24 +896,97 @@ def record_chess_game(player_email: str, opponent_email: str, result: str, times
         return False
 
 
-def get_chess_stats_sync(user_email: str, opponent_email: str):
-    """Return wins/losses for user against opponent. Returns None on error."""
+def get_chess_stats_sync(user_email: str, opponent_email: Optional[str] = None):
+    """
+    Return chess stats for user vs opponent. If opponent_email is None, use last opponent.
+    Returns dict with score, opponent_name (email), last_game_date, or None on error.
+    """
     try:
         with get_db_session() as session:
+            if not opponent_email:
+                last_row = session.execute(
+                    text("""
+                        SELECT opponent_email, timestamp
+                        FROM chess_games
+                        WHERE player_email = :user_email
+                        ORDER BY timestamp DESC
+                        LIMIT 1
+                    """),
+                    {"user_email": user_email},
+                ).fetchone()
+                if not last_row:
+                    return {"score": "0:0", "opponent_name": "", "last_game_date": "", "wins": 0, "losses": 0}
+                opponent_email = last_row[0]
+                last_ts = last_row[1]
+            else:
+                last_ts = None
+
             result = session.execute(
                 text("""
                     SELECT
                         COUNT(*) FILTER (WHERE result = 'win') AS wins,
-                        COUNT(*) FILTER (WHERE result = 'loss') AS losses
+                        COUNT(*) FILTER (WHERE result = 'loss') AS losses,
+                        MAX(timestamp) AS last_game_timestamp
                     FROM chess_games
                     WHERE player_email = :user_email AND opponent_email = :opponent_email
                 """),
                 {"user_email": user_email, "opponent_email": opponent_email},
             )
             row = result.fetchone()
-            if row:
-                return {"wins": row[0] or 0, "losses": row[1] or 0}
-        return {"wins": 0, "losses": 0}
+            if not row:
+                return {"score": "0:0", "opponent_name": opponent_email, "last_game_date": "", "wins": 0, "losses": 0}
+            wins = row[0] or 0
+            losses = row[1] or 0
+            ts = last_ts or row[2]
+            last_date = ""
+            if ts:
+                from datetime import datetime, timezone
+                try:
+                    dt = datetime.fromtimestamp(int(ts) / 1000.0, tz=timezone.utc)
+                    last_date = dt.strftime("%Y-%m-%d")
+                except Exception:
+                    pass
+            return {
+                "score": f"{wins}:{losses}",
+                "opponent_name": opponent_email,
+                "last_game_date": last_date,
+                "wins": wins,
+                "losses": losses,
+            }
     except Exception as e:
         logger.exception("get_chess_stats_sync failed: %s", e)
+        return None
+
+
+def get_all_chess_data_sync(user_email: str):
+    """Return total_wins and opponents dict {email: 'wins:losses'}. None on error."""
+    try:
+        with get_db_session() as session:
+            total_row = session.execute(
+                text("""
+                    SELECT COUNT(*) FILTER (WHERE result = 'win') AS total_wins
+                    FROM chess_games
+                    WHERE player_email = :user_email
+                """),
+                {"user_email": user_email},
+            ).fetchone()
+            total_wins = int(total_row[0] or 0) if total_row else 0
+
+            opp_rows = session.execute(
+                text("""
+                    SELECT opponent_email,
+                           COUNT(*) FILTER (WHERE result = 'win') AS wins,
+                           COUNT(*) FILTER (WHERE result = 'loss') AS losses
+                    FROM chess_games
+                    WHERE player_email = :user_email
+                    GROUP BY opponent_email
+                """),
+                {"user_email": user_email},
+            ).fetchall()
+            opponents = {}
+            for r in opp_rows:
+                opponents[r[0]] = f"{r[1] or 0}:{r[2] or 0}"
+            return {"total_wins": total_wins, "opponents": opponents}
+    except Exception as e:
+        logger.exception("get_all_chess_data_sync failed: %s", e)
         return None

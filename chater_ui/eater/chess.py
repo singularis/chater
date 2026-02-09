@@ -1,4 +1,4 @@
-"""Chess game recording via Kafka (app -> eater service)."""
+"""Chess endpoints via Kafka (app -> eater service)."""
 import logging
 
 from flask import jsonify, request
@@ -8,6 +8,7 @@ from kafka_producer import KafkaDispatchError, send_kafka_message
 logger = logging.getLogger(__name__)
 
 RECORD_CHESS_GAME_TIMEOUT = 15
+CHESS_READ_TIMEOUT = 10
 
 
 def record_chess_game_request(user_email):
@@ -52,7 +53,6 @@ def record_chess_game_request(user_email):
                 "result": result,
                 "timestamp": timestamp,
             },
-            key=str(uuid.uuid4()),
         )
 
         response = get_user_message_response(
@@ -87,3 +87,62 @@ def record_chess_game_request(user_email):
     except Exception as e:
         logger.exception("record_chess_game failed for %s: %s", user_email, e)
         return jsonify({"success": False, "error": "Internal server error"}), 500
+
+
+def get_chess_stats_request(user_email):
+    """
+    Optional JSON body: {"opponent_email": "..."}. Send get_chess_stats to Kafka, wait for response.
+    Returns (response_body, status_code).
+    """
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        opponent_email = (data.get("opponent_email") or "").strip() or None
+
+        message_id = send_kafka_message(
+            "get_chess_stats",
+            value={"user_email": user_email, "opponent_email": opponent_email},
+        )
+        response = get_user_message_response(
+            message_id, user_email, timeout=CHESS_READ_TIMEOUT
+        )
+        if response is None:
+            return jsonify({"error": "Service temporarily unavailable"}), 503
+        if response.get("error"):
+            return jsonify({"error": response.get("error")}), 500
+        return jsonify({
+            "score": response.get("score", "0:0"),
+            "opponent_name": response.get("opponent_name", ""),
+            "last_game_date": response.get("last_game_date", ""),
+        }), 200
+    except KafkaDispatchError as e:
+        logger.error("Kafka error in get_chess_stats for %s: %s", user_email, e)
+        return jsonify({"error": "Service unavailable"}), e.status_code
+    except Exception as e:
+        logger.exception("get_chess_stats failed for %s: %s", user_email, e)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+def get_all_chess_data_request(user_email):
+    """Send get_all_chess_data to Kafka, wait for response. Returns (response_body, status_code)."""
+    try:
+        message_id = send_kafka_message(
+            "get_all_chess_data",
+            value={"user_email": user_email},
+        )
+        response = get_user_message_response(
+            message_id, user_email, timeout=CHESS_READ_TIMEOUT
+        )
+        if response is None:
+            return jsonify({"error": "Service temporarily unavailable"}), 503
+        if response.get("error"):
+            return jsonify({"error": response.get("error")}), 500
+        return jsonify({
+            "total_wins": response.get("total_wins", 0),
+            "opponents": response.get("opponents", {}),
+        }), 200
+    except KafkaDispatchError as e:
+        logger.error("Kafka error in get_all_chess_data for %s: %s", user_email, e)
+        return jsonify({"error": "Service unavailable"}), e.status_code
+    except Exception as e:
+        logger.exception("get_all_chess_data failed for %s: %s", user_email, e)
+        return jsonify({"error": "Internal server error"}), 500
