@@ -427,21 +427,21 @@ def autocomplete_info():
         "websocket_url": websocket_url,
         "note": "Use WebSocket protocol (ws://) not HTTP"
     }), 400
-@app.route("/record_chess_game", methods=["POST"])
+@app.route(dev_route("/record_chess_game"), methods=["POST"])
 @track_eater_operation("record_chess_game")
 @token_required
 def record_chess_game_route(user_email):
     return record_chess_game_request(user_email)
 
 
-@app.route("/get_chess_stats", methods=["POST"])
+@app.route(dev_route("/get_chess_stats"), methods=["POST"])
 @track_eater_operation("get_chess_stats")
 @token_required
 def get_chess_stats_route(user_email):
     return get_chess_stats_request(user_email)
 
 
-@app.route("/get_all_chess_data", methods=["GET"])
+@app.route(dev_route("/get_all_chess_data"), methods=["GET"])
 @track_eater_operation("get_all_chess_data")
 @token_required
 def get_all_chess_data_route(user_email):

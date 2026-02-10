@@ -54,6 +54,22 @@ The system is composed of multiple specialized microservices, each handling spec
 - **PostgreSQL**: Primary data storage
  - **Neo4j**: Graph database for social relationships
 
+## 🌍 Environment Architecture
+
+The system implements a "Twin Deployment" strategy to ensure robust development and testing capabilities without impacting production users.
+
+### Twin Deployment Model
+Every microservice in the ecosystem is deployed twice:
+1.  **Production**: The stable, user-facing instance.
+2.  **Development**: An isolated instance for testing new features (typically suffixed with `-dev`).
+
+### Environment Isolation
+To prevent data cross-contamination, the development environment is fully isolated at the infrastructure level:
+-   **Routing**: Development routes are automatically prefixed with `/dev` (e.g., `/dev/chater_login`) through the `dev_route` wrapper.
+-   **Messaging**: Kafka topics in dev mode are suffixed with `_dev` (e.g., `gpt-response_dev`).
+-   **Caching**: Redis keys in dev mode are prefixed with `_dev:` to avoid collisions with production sessions.
+-   **Switching Mechanism**: The UI includes a context switching mechanism (`/toggle-dev-mode`) that allows developers to toggle between the production and development backends seamlessly from the same interface.
+
 ## 🛠️ Technology Stack
 
 ### Backend Technologies
