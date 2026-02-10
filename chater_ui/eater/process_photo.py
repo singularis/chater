@@ -111,6 +111,7 @@ def eater_get_photo(user_email, local_model_service):
 
         message_id = str(uuid.uuid4())
         photo_base64 = base64.b64encode(resized_photo_data).decode("utf-8")
+
         try:
             _dispatch_photo_message(
                 photo_base64,

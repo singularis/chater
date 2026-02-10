@@ -240,7 +240,10 @@ def get_respond_in_language(user_email: str) -> str:
 
 
 def create_multilingual_prompt(
-    base_prompt_key: str, user_email: str, is_add_lang_instruction: bool = True
+    base_prompt_key: str,
+    user_email: str,
+    is_add_lang_instruction: bool = True,
+    language_override: str | None = None,
 ) -> str:
     """
     Create a multilingual prompt by combining a base prompt with language instructions.
@@ -248,6 +251,7 @@ def create_multilingual_prompt(
     Args:
         base_prompt_key: The key for the base prompt in prompt.yaml
         user_email: User email to determine language preference
+        language_override: If set (e.g. from request), use this instead of stored user language
 
     Returns:
         Combined prompt with language instructions
@@ -255,7 +259,10 @@ def create_multilingual_prompt(
     try:
         base_prompt = get_prompt(base_prompt_key)
         lang_instruction = get_prompt("respond_in_language")
-        user_lang = get_respond_in_language(user_email)
+        if language_override and len(language_override.strip()) == 2:
+            user_lang = language_override.strip().lower()
+        else:
+            user_lang = get_respond_in_language(user_email)
 
         # Combine prompts with language instruction
         if is_add_lang_instruction:
@@ -381,6 +388,10 @@ def json_to_plain_text(json_data):
         "foods_to_reduce_or_avoid": "Foods to Reduce or Avoid",
         "healthier_foods": "Healthier Food Options",
         "general_recommendations": "General Recommendations",
+        "age_based_health_advice": "Health Advice",
+        "recommended_dish": "Try This Dish",
+        "coffee_warning": "Coffee Warning",
+        "weekly_sugar_summary": "Weekly Sugar Intake",
     }
 
     section_headers = {
@@ -392,7 +403,9 @@ def json_to_plain_text(json_data):
         if not foods or not isinstance(foods, list):
             return ""
 
-        result = f"{section_headers[header_key]}:\n\n"
+        # Add color emoji based on section
+        emoji = "🔴" if header_key == "foods_to_reduce_or_avoid" else "🟢"
+        result = f"{emoji} {section_headers[header_key]}:\n\n"
         for food in foods:
             if isinstance(food, dict):
                 dish_name = food.get("dish_name", "Unnamed Dish")
@@ -423,11 +436,47 @@ def json_to_plain_text(json_data):
     output_text += format_food_list(json_data.get("healthier_foods"), "healthier_foods")
     output_text += format_recommendations(json_data.get("general_recommendations"))
 
+    # Add age-based health advice
+    age_advice = json_data.get("age_based_health_advice")
+    if age_advice and isinstance(age_advice, str) and age_advice.strip():
+        output_text += f"💡 {section_headers['age_based_health_advice']}:\n{age_advice}\n\n"
+
+    # Add recommended dish (only if present and not empty)
+    recommended_dish = json_data.get("recommended_dish")
+    if recommended_dish and isinstance(recommended_dish, dict) and recommended_dish:
+        cuisine = recommended_dish.get("cuisine", "")
+        dish = recommended_dish.get("dish", "")
+        desc = recommended_dish.get("description", "")
+        # Only show if dish name is present
+        if dish and dish.strip():
+            output_text += f"🍽️ {section_headers['recommended_dish']}:\n{dish}"
+            if cuisine:
+                output_text += f" ({cuisine})"
+            if desc:
+                output_text += f" - {desc}"
+            output_text += "\n\n"
+
+    # Add coffee warning if present
+    coffee_warning = json_data.get("coffee_warning")
+    if coffee_warning and isinstance(coffee_warning, str) and coffee_warning.strip():
+        output_text += f"☕ {section_headers['coffee_warning']}:\n{coffee_warning}\n\n"
+
+    # Add weekly sugar summary if present
+    weekly_sugar = json_data.get("weekly_sugar_summary")
+    if weekly_sugar and isinstance(weekly_sugar, str) and weekly_sugar.strip():
+        output_text += f"🍬 {section_headers['weekly_sugar_summary']}:\n{weekly_sugar}\n\n"
+
     excluded_fields = {
         "general_recommendations",
         "healthier_foods",
         "foods_to_reduce_or_avoid",
         "translation_keys",
+        "age_based_health_advice",
+        "recommended_dish",
+        "coffee_warning",
+        "weekly_sugar_summary",
+        "foods_to_reduce_title_color",
+        "healthier_foods_title_color",
     }
 
     for key, value in json_data.items():

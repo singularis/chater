@@ -6,6 +6,7 @@ import uuid
 
 import uvicorn
 from common import token_required, validate_websocket_token
+from connection_manager import manager, safe_send_websocket_message
 from fastapi import (FastAPI, HTTPException, Request, WebSocket,
                      WebSocketDisconnect)
 from fastapi.responses import Response
@@ -13,7 +14,8 @@ from kafka_producer import produce_message
 from dev_utils import get_topic_name
 from logging_config import setup_logging
 from neo4j_connection import neo4j_connection
-from postgres import autocomplete_query, database, get_food_record_by_time, ensure_nickname_column, update_nickname, get_nickname
+from postgres import (autocomplete_query, database, get_food_record_by_time,
+                      ensure_nickname_column, update_nickname, get_nickname)
 from proto import add_friend_pb2, get_friends_pb2, share_food_pb2
 from starlette.websockets import WebSocketState
 
@@ -22,41 +24,12 @@ app = FastAPI(title="Autocomplete Service", version="1.0.0")
 setup_logging("autocomplete_service.log")
 logger = logging.getLogger("autocomplete_service")
 
-
-async def safe_send_websocket_message(websocket: WebSocket, message: dict) -> bool:
-    try:
-        if websocket.client_state == WebSocketState.CONNECTED:
-            await websocket.send_text(json.dumps(message))
-            return True
-        return False
-    except Exception:
-        return False
-
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections = []
-        self.user_connections = {}
-
-    async def connect(self, websocket: WebSocket, user_email: str):
-        self.active_connections.append(websocket)
-        self.user_connections[user_email] = websocket
-
-    def disconnect(self, websocket: WebSocket, user_email: str):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-        if user_email in self.user_connections:
-            del self.user_connections[user_email]
-
-
-manager = ConnectionManager()
-
 @app.on_event("startup")
 async def startup():
     await database.connect()
     try:
         await ensure_nickname_column()
-    except:
+    except Exception:
         logger.warning("Could not ensure nickname column")
     neo4j_connection.connect()
 
@@ -443,7 +416,7 @@ async def websocket_autocomplete(websocket: WebSocket):
     except WebSocketDisconnect:
         if user_email:
             manager.disconnect(websocket, user_email)
-    except:
+    except Exception:
         if user_email:
             manager.disconnect(websocket, user_email)
 
