@@ -1,0 +1,82 @@
+- name: Deploy Kubernetes objects for auth application (DEV)
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - ../../vars.yaml
+
+  tasks:
+    - name: Create chater-auth-dev Namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: chater-auth-dev
+    - name: Deploy chater-auth-dev Deployment
+      kubernetes.core.k8s:
+        state: present
+        namespace: chater-auth-dev
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: chater-auth-dev
+            namespace: chater-auth-dev
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: chater-auth-dev
+            template:
+              metadata:
+                labels:
+                  app: chater-auth-dev
+                annotations:
+                  co.elastic.logs/enabled: "true"
+              spec:
+                containers:
+                  - name: chater-auth-dev
+                    image: docker.io/singularis314/chater-auth-dev:0.1
+                    imagePullPolicy: Always
+                    env:
+                      - name: IS_DEV
+                        value: "true"
+                      - name: EATER_SECRET_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: chater-auth-dev
+                            key: EATER_SECRET_KEY
+                      - name: BOOTSTRAP_SERVERS
+                        value: "{{ vars.BOOTSTRAP_SERVER }}"
+                      - name: LOG_LEVEL
+                        value: "{{ vars.LOG_LEVEL }}"
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: kubernetes.io/hostname
+                              operator: In
+                              values:
+                                - racoon-gpu
+                tolerations:
+                  - key: "gpu-only"
+                    operator: "Equal"
+                    value: "true"
+                    effect: "NoSchedule"
+    - name: Create secret for environment variables
+      kubernetes.core.k8s:
+        state: present
+        namespace: chater-auth-dev
+        kind: Secret
+        name: chater-auth-dev
+        resource_definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: chater-auth-dev
+            namespace: chater-auth-dev
+          data:
+            EATER_SECRET_KEY: "{{ vars.EATER_SECRET_KEY | b64encode }}"

@@ -1,0 +1,80 @@
+- name: Deploy Locust load tests for chater-ui
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - ../../vars.yaml
+
+  tasks:
+    - name: Create load-test Namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: load-test
+    - name: Deploy Locust Deployment
+      kubernetes.core.k8s:
+        state: present
+        namespace: load-test
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: locust
+            namespace: load-test
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: locust
+            template:
+              metadata:
+                labels:
+                  app: locust
+                annotations:
+                  co.elastic.logs/enabled: "true"
+              spec:
+                containers:
+                  - name: locust
+                    image: docker.io/singularis314/locust-chater:0.1
+                    imagePullPolicy: Always
+                    ports:
+                      - containerPort: 8089
+                        name: web
+                    env:
+                      - name: TEST_USER_TOKEN
+                        value: "{{ vars.TEST_USER_TOKEN }}"
+                      - name: TEST_USER_EMAIL
+                        value: "{{ vars.TEST_USER_EMAIL }}"
+                      - name: TEST_AUTH_PROVIDER
+                        value: "{{ vars.TEST_AUTH_PROVIDER }}"
+                      - name: TEST_AUTH_EMAIL
+                        value: "{{ vars.TEST_AUTH_EMAIL }}"
+                      - name: TEST_AUTH_NAME
+                        value: "{{ vars.TEST_AUTH_NAME }}"
+                      - name: TEST_AUTH_PROFILE_URL
+                        value: "{{ vars.TEST_AUTH_PROFILE_URL }}"
+                      - name: TEST_AUTH_TOKEN
+                        value: "{{ vars.TEST_AUTH_TOKEN }}"
+                      - name: TARGET_HOST
+                        value: "{{ vars.EATER_TARGET_HOST }}"
+    - name: Create Locust Service (MetalLB LoadBalancer)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: locust
+            namespace: load-test
+          spec:
+            type: LoadBalancer
+            selector:
+              app: locust
+            loadBalancerIP: 192.168.0.112
+            ports:
+              - name: web
+                port: 8089
+                targetPort: 8089

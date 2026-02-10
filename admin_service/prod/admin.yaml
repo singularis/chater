@@ -1,0 +1,82 @@
+- name: Deploy Kubernetes objects for eater application
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - ../../vars.yaml
+
+  tasks:
+    - name: Deploy eater Deployment
+      kubernetes.core.k8s:
+        state: present
+        namespace: eater
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: admin-service 
+            namespace: eater
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app:  admin-service 
+            template:
+              metadata:
+                labels:
+                  app:  admin-service 
+                annotations:
+                  co.elastic.logs/enabled: "true"
+              spec:
+                containers:
+                  - name:  admin-service 
+                    image: docker.io/singularis314/admin-service:0.1
+                    imagePullPolicy: Always
+                    env:
+                      - name: BOOTSTRAP_SERVER
+                        value: "{{ vars.BOOTSTRAP_SERVER }}"
+                      - name: POSTGRES_USER
+                        value: "{{ vars.EATER.DB_NAME }}"
+                      - name: POSTGRES_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: "{{ vars.EATER.DB_PASSWORD }}"
+                            key: password
+                      - name: POSTGRES_DB
+                        value: "{{ vars.EATER.DB_NAME }}"
+                      - name: POSTGRES_HOST
+                        value: "{{ vars.EATER.POSTGRES_HOST }}" 
+                      - name: TEST_USER_EMAIL
+                        value: "{{ vars.TEST_USER_EMAIL }}"
+                      - name: LOG_LEVEL
+                        value: "{{ vars.LOG_LEVEL }}" 
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: kubernetes.io/hostname
+                              operator: In
+                              values:
+                                - racoon
+                                - racoon-gpu
+    - name: Create Admin Service
+      kubernetes.core.k8s:
+        state: present
+        namespace: eater
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: admin-service
+            namespace: eater
+          spec:
+            selector:
+              app:  admin-service 
+            ports:
+              - name: http
+                protocol: TCP
+                port: 80
+                targetPort: 5000
+            type: LoadBalancer
+            loadBalancerIP: 192.168.0.113   

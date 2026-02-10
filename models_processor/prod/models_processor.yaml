@@ -1,0 +1,101 @@
+- name: Deploy Kubernetes objects for eater application
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - ../../vars.yaml
+
+  tasks:
+    - name: Create eater Namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ vars.MODELS_PROCESSOR.NAMESPACE }}"
+    - name: Ensure models-processor Service
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ vars.MODELS_PROCESSOR.NAMESPACE }}"
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: models-processor
+            namespace: "{{ vars.MODELS_PROCESSOR.NAMESPACE }}"
+          spec:
+            selector:
+              app: models-processor
+            ports:
+              - port: 8000
+                targetPort: 8000
+                protocol: TCP
+    - name: Deploy eater Deployment
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ vars.MODELS_PROCESSOR.NAMESPACE }}"
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: models-processor
+            namespace: "{{ vars.MODELS_PROCESSOR.NAMESPACE }}"
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: models-processor
+            template:
+              metadata:
+                labels:
+                  app: models-processor
+                annotations:
+                  co.elastic.logs/enabled: "true"
+              spec:
+                affinity:
+                  nodeAffinity:
+                    preferredDuringSchedulingIgnoredDuringExecution:
+                      - weight: 100
+                        preference:
+                          matchExpressions:
+                            - key: kubernetes.io/hostname
+                              operator: In
+                              values: ["racoon-gpu"]
+                containers:
+                  - name: models-processor
+                    image: docker.io/singularis314/models_processor:0.1
+                    imagePullPolicy: Always
+                    env:
+                      - name: BOOTSTRAP_SERVER
+                        value: "{{ vars.BOOTSTRAP_SERVER }}"
+                      - name: LOCAL_MODEL_KAFKA_TOPIC
+                        value: "{{ vars.MODELS_PROCESSOR.LOCAL_MODEL_KAFKA_TOPIC }}"
+                      - name: OLLAMA_HOST
+                        value: "{{ vars.MODELS_PROCESSOR.OLLAMA_HOST }}"
+                      - name: OLLAMA_MODEL
+                        value: "{{ vars.MODELS_PROCESSOR.OLLAMA_MODEL }}"
+                      - name: LOG_LEVEL
+                        value: "{{ vars.LOG_LEVEL }}"
+                    ports:
+                      - containerPort: 8000
+                        name: http
+                    resources:
+                      requests:
+                        memory: "128Mi"
+                        cpu: "100m"
+                      limits:
+                        memory: "256Mi"
+                        cpu: "200m"
+                    livenessProbe:
+                      httpGet:
+                        path: /health
+                        port: 8000
+                      initialDelaySeconds: 30
+                      periodSeconds: 300
+                    readinessProbe:
+                      httpGet:
+                        path: /ready
+                        port: 8000
+                      initialDelaySeconds: 5
+                      periodSeconds: 15

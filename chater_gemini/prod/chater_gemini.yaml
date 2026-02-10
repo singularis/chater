@@ -1,0 +1,80 @@
+- name: Deploy Kubernetes objects for gemini application
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - ../../vars.yaml
+
+  tasks:
+    - name: Create gemini Namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: chater-gemini
+    - name: Deploy chater Deployment
+      kubernetes.core.k8s:
+        state: present
+        namespace: chater-gemini
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: chater-gemini
+            namespace: chater-gemini
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: chater-gemini
+            template:
+              metadata:
+                labels:
+                  app: chater-gemini
+                annotations:
+                  co.elastic.logs/enabled: "true"
+              spec:
+                containers:
+                  - name: chater-gemini
+                    image: docker.io/singularis314/chater-gemini:0.3
+                    imagePullPolicy: Always
+                    env:
+                      - name: GOOGLE_API_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: chater-gemini
+                            key: GOOGLE_API_KEY
+                      - name: BOOTSTRAP_SERVER
+                        value: "{{ vars.BOOTSTRAP_SERVER }}"
+                      - name: GEMINI_MODEL
+                        value: "{{ vars.GEMINI_MODEL }}"
+                      - name: GEMINI_THINK_MODEL
+                        value: "{{ vars.GEMINI_THINK_MODEL }}"
+                      - name: LOG_LEVEL
+                        value: "{{ vars.LOG_LEVEL }}"
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: kubernetes.io/hostname
+                              operator: In
+                              values:
+                                - racoon
+                                - racoon-gpu
+    - name: Create secret for environment variables
+      kubernetes.core.k8s:
+        state: present
+        namespace: chater-gemini
+        kind: Secret
+        name: chater-gemini
+        resource_definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: chater-gemini
+            namespace: chater-gemini
+          data:
+            GOOGLE_API_KEY: "{{ vars.GEMINI_API_KEY | b64encode }}"

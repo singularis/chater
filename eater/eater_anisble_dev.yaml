@@ -1,9 +1,0 @@
----
-- name: "Main eater DEV"
-  hosts: localhost
-  connection: local
-  gather_facts: no
-- name: Import eater dev
-  import_playbook: ./eater_dev.yaml
-- name: Import postgres dev
-  import_playbook: ./postgres_eater_dev.yaml
