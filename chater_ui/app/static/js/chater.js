@@ -85,6 +85,44 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.error('Error updating switch state:', error);
             });
     });
+
+    // Manage the dev mode switch
+    const devModeSwitch = document.getElementById('dev-mode-switch');
+
+    // Fetch from local storage
+    const savedDevModeState = localStorage.getItem('devModeSwitchState');
+    if (savedDevModeState) {
+        devModeSwitch.checked = (savedDevModeState === 'on');
+    }
+
+    // Fetch from server
+    fetch('/get-dev-mode-state')
+        .then(response => response.json())
+        .then(data => {
+            if (!savedDevModeState) {
+                devModeSwitch.checked = (data.dev_mode === 'on');
+            }
+        })
+        .catch(error => console.error('Error fetching dev mode state:', error));
+
+    // Event listener
+    devModeSwitch.addEventListener('change', function () {
+        const switchState = this.checked ? 'on' : 'off';
+        localStorage.setItem('devModeSwitchState', switchState);
+
+        fetch('/toggle-dev-mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: switchState })
+        })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Dev mode updated:', data);
+            })
+            .catch(error => {
+                console.error('Error updating dev mode:', error);
+            });
+    });
 });
 
 // Function to manage collapsible blocks

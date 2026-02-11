@@ -2,6 +2,7 @@ import logging
 import os
 
 from confluent_kafka import Consumer, KafkaError
+from dev_utils import get_kafka_group_id
 
 logger = logging.getLogger("kafka_consumer")
 
@@ -18,10 +19,11 @@ def consume_messages(
         logger.error("Expected list of topic unicode strings")
         raise TypeError("Expected list of topic unicode strings")
 
+    group_id = get_kafka_group_id("chater")
     consumer = Consumer(
         {
             "bootstrap.servers": os.getenv("BOOTSTRAP_SERVER"),
-            "group.id": "chater",
+            "group.id": group_id,
             "auto.offset.reset": "latest",
             "enable.auto.commit": False,
         }
@@ -42,3 +44,4 @@ def consume_messages(
 
         logger.info(f"Consumed message: {msg}")
         yield msg, consumer
+

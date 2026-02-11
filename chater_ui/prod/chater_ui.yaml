@@ -1,0 +1,211 @@
+- name: Deploy Kubernetes objects for chater application
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - ../../vars.yaml
+
+  tasks:
+    - name: Create chater Namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: chater-ui
+    - name: Deploy chater Deployment
+      kubernetes.core.k8s:
+        state: present
+        namespace: chater-ui
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: chater-ui
+            namespace: chater-ui
+          spec:
+            replicas: 2
+            strategy:
+              type: RollingUpdate
+              rollingUpdate:
+                maxUnavailable: 0
+                maxSurge: 1
+            selector:
+              matchLabels:
+                app: chater-ui
+            template:
+              metadata:
+                labels:
+                  app: chater-ui
+                annotations:
+                  co.elastic.logs/enabled: "true"
+              spec:
+                containers:
+                  - name: chater-ui
+                    image: docker.io/singularis314/chater-ui:0.5
+                    imagePullPolicy: Always
+                    ports:
+                      - containerPort: 5000
+                        name: chater-ui
+                    env:
+                      - name: USERNAME
+                        valueFrom:
+                          secretKeyRef:
+                            name: chater-ui
+                            key: USERNAME
+                      - name: PASSWORD_HASH
+                        valueFrom:
+                          secretKeyRef:
+                            name: chater-ui
+                            key: PASSWORD_HASH
+                      - name: SECRET_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: chater-ui
+                            key: SECRET_KEY
+                      - name: GOOGLE_APPLICATION_CREDENTIALS
+                        value: /var/secrets/google/service-account.json
+                      - name: SESSION_LIFETIME
+                        value: "{{ vars.SESSION_LIFETIME }}"
+                      - name: GCP_PROJECT_ID
+                        value: "{{ vars.GCP_PROJECT_ID }}"
+                      - name: BOOTSTRAP_SERVER
+                        value: "{{ vars.BOOTSTRAP_SERVER }}"
+                      - name: GOOGLE_OAUTH_CLIENT_ID
+                        value: "{{ vars.GOOGLE_OAUTH_CLIENT_ID }}"
+                      - name: GOOGLE_OAUTH_CLIENT_SECRET
+                        value: "{{ vars.GOOGLE_OAUTH_CLIENT_SECRET }}"
+                      - name: ALLOWED_EMAILS
+                        value: "{{ vars.ALLOWED_EMAILS }}"
+                      - name: EATER_SECRET_KEY
+                        value: "{{ vars.EATER_SECRET_KEY }}"
+                      - name: REDIS_ENDPOINT
+                        value: "{{ vars.REDIS_ENDPOINT }}"
+                      - name: DAILY_REQUEST_LIMIT
+                        value: "30"
+                      - name: MINIO_ENDPOINT
+                        value: "http://{{ vars.minio.loadBalancerIP }}:9000"
+                      - name: MINIO_ACCESS_KEY
+                        value: "{{ vars.minio.root_user }}"
+                      - name: MINIO_SECRET_KEY
+                        value: "{{ vars.minio.root_password }}"
+                      - name: MINIO_BUCKET_EATER
+                        value: "eater"
+                      - name: MINIO_BUCKET_GPHOTO
+                        value: "gphoto"
+                      - name: MINIO_SECURE
+                        value: "false"
+                      - name: POSTGRES_USER
+                        value: "{{ vars.EATER.DB_NAME }}"
+                      - name: POSTGRES_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: "{{ vars.EATER.DB_PASSWORD }}"
+                            key: password
+                      - name: POSTGRES_DB
+                        value: "{{ vars.EATER.DB_NAME }}"
+                      - name: POSTGRES_HOST
+                        value: "{{ vars.EATER.POSTGRES_HOST }}"
+                      - name: TEST_USER_EMAIL
+                        value: "{{ vars.TEST_USER_EMAIL }}"
+                      - name: LOCAL_MODEL_SERVICE_URL
+                        value: "{{ vars.MODELS_PROCESSOR.LOCAL_MODEL_SERVICE_URL }}"
+                      - name: LOCAL_MODEL_KAFKA_TOPIC
+                        value: "{{ vars.MODELS_PROCESSOR.LOCAL_MODEL_KAFKA_TOPIC }}"
+                      - name: DEFAULT_MODEL_TIER
+                        value: "{{ vars.MODELS_PROCESSOR.DEFAULT_MODEL_TIER }}"
+                      - name: LOG_LEVEL
+                        value: "{{ vars.LOG_LEVEL }}"
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: kubernetes.io/hostname
+                              operator: In
+                              values:
+                                - "racoon"
+                                - "racoon-gpu"
+    - name: Create chater Service
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: chater-ui
+            namespace: chater-ui
+            labels:
+              app: chater-ui
+          spec:
+            ports:
+              - port: 5000
+                targetPort: 5000
+                name: http
+                nodePort: 30600
+            selector:
+              app: chater-ui
+            type: NodePort
+
+    - name: Create PodDisruptionBudget for chater-ui
+      kubernetes.core.k8s:
+        state: present
+        namespace: chater-ui
+        definition:
+          apiVersion: policy/v1
+          kind: PodDisruptionBudget
+          metadata:
+            name: chater-ui-pdb
+            namespace: chater-ui
+          spec:
+            minAvailable: 1
+            selector:
+              matchLabels:
+                app: chater-ui
+
+    - name: Create ServiceMonitor for chater-ui
+      tags:
+        - servicemonitor
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: monitoring.coreos.com/v1
+          kind: ServiceMonitor
+          metadata:
+            name: chater-ui-monitor
+            namespace: monitoring
+            labels:
+              app: gphoto-flask-prometheus
+          spec:
+            jobLabel: app
+            selector:
+              matchLabels:
+                app: chater-ui
+            namespaceSelector:
+              matchNames:
+                - chater-ui
+            endpoints:
+              - port: http
+                path: /metrics
+                interval: 30s
+                scheme: http
+
+    
+    - name: Create secret for environment variables
+      kubernetes.core.k8s:
+        state: present
+        namespace: chater-ui
+        kind: Secret
+        name: chater-ui
+        resource_definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: chater-ui
+            namespace: chater-ui
+          data:
+            USERNAME: "{{ vars.USER | b64encode }}"
+            PASSWORD_HASH: "{{ vars.PASSWORD | b64encode }}"
+            SECRET_KEY: "{{ vars.SECRET_KEY | b64encode }}"
+    

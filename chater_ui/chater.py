@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import uuid
 
@@ -10,6 +11,8 @@ from kafka_producer import KafkaDispatchError, send_kafka_message
 
 logger = logging.getLogger(__name__)
 
+# Dev environment detection
+IS_DEV = os.getenv("IS_DEV", "false").lower() == "true"
 
 TARGET_CONFIG = {
     "chater": {
@@ -45,17 +48,28 @@ def chater(session, target):
         question = request.form["question"]
         question = sanitize_question(question=question)
         logger.debug("Queued question from UI; target=%s", target)
+        
+        # Resolve dev mode state
+        dev_mode_str = session.get("dev_mode")
+        is_dev_mode = (dev_mode_str == "on") if dev_mode_str is not None else IS_DEV
+        
+        def get_topic(base_name):
+            return f"{base_name}_dev" if is_dev_mode else base_name
+
+        send_topic = get_topic(target_config["send_topic"])
+        receive_topics = [get_topic(t) for t in target_config["receive_topic"]]
+
         question_uuid = str(uuid.uuid4())
         message = {
             "key": question_uuid,
             "value": {
                 "question": question,
-                "send_topic": target_config["send_topic"],
+                "send_topic": send_topic,
                 "context": session.get("context", None),
                 "think": True,
             },
         }
-        logger.debug("Produced message payload for UUID %s", question_uuid)
+        logger.debug("Produced message payload for UUID %s (DevMode=%s)", question_uuid, is_dev_mode)
         try:
             send_kafka_message(
                 "dlp-source",
@@ -78,7 +92,7 @@ def chater(session, target):
             return redirect(url_for(target_config["target"]))
 
         json_response = get_messages(
-            question_uuid, topics=target_config["receive_topic"]
+            question_uuid, topics=receive_topics
         )
         logger.debug("Received raw message response for UUID %s", question_uuid)
         try:

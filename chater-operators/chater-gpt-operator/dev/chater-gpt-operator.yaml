@@ -1,0 +1,137 @@
+---
+- name: Deploy ChaterGPT Operator and CRD (DEV)
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Create chater-dev Namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: chater-gpt-dev
+    - name: Create or Update the ChaterGpt CRD (DEV)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apiextensions.k8s.io/v1
+          kind: CustomResourceDefinition
+          metadata:
+            name: chatergpts.chater.example.com
+          spec:
+            group: chater.example.com
+            versions:
+              - name: v1
+                served: true
+                storage: true
+                schema:
+                  openAPIV3Schema:
+                    type: object
+                    properties:
+                      spec:
+                        type: object
+                        properties:
+                          namespace:
+                            type: string
+                          bootstrapServer:
+                            type: string
+                          model:
+                            type: string
+                          visionModel:
+                            type: string
+                          openAIAPIKey:
+                            type: string
+                          secretKey:
+                            type: string
+                          replicas:
+                            type: integer
+                            minimum: 1
+                          isDev:
+                            type: string
+                          logLevel:
+                            type: string
+                          affinity:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+            scope: Namespaced
+            names:
+              plural: chatergpts
+              singular: chatergpt
+              kind: ChaterGpt
+              shortNames:
+                - cgt
+
+    - name: Create or Update the ClusterRole for ChaterGPT Operator (DEV)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: chater-gpt-operator-dev
+          rules:
+            - apiGroups: ["chater.example.com"]
+              resources: ["chatergpts"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: ["apiextensions.k8s.io"]
+              resources: ["customresourcedefinitions"]
+              verbs: ["get", "list", "watch", "create", "update", "delete"]
+            - apiGroups: [""]
+              resources: ["events", "namespaces"]
+              verbs: ["get", "list", "watch", "create", "delete"]
+            - apiGroups: ["apps"]
+              resources: ["deployments"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: [""]
+              resources: ["secrets"]
+              verbs: ["get", "list", "watch", "create", "delete", "patch"]
+
+
+    - name: Create or Update the ClusterRoleBinding for ChaterGPT Operator (DEV)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: chater-gpt-operator-binding-dev
+          subjects:
+            - kind: ServiceAccount
+              name: default
+              namespace: chater-gpt-dev
+          roleRef:
+            kind: ClusterRole
+            name: chater-gpt-operator-dev
+            apiGroup: rbac.authorization.k8s.io
+
+    - name: Create or Update the ChaterGPT Operator Deployment (DEV)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: chater-gpt-operator-dev
+            namespace: chater-gpt-dev
+            labels:
+              app: chater-gpt-operator-dev
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: chater-gpt-operator-dev
+            template:
+              metadata:
+                labels:
+                  app: chater-gpt-operator-dev
+              spec:
+                serviceAccountName: default
+                containers:
+                  - name: chater-gpt-operator-dev
+                    image: docker.io/singularis314/chater-gpt-operator-dev:0.1
+                    imagePullPolicy: Always
+                    env:
+                      - name: IS_DEV
+                        value: "true"

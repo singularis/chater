@@ -6,6 +6,8 @@ import re
 import threading
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
+from dev_utils import get_topic_name
+
 
 from common import load_kafka_payload
 from flask import Flask, jsonify
@@ -115,7 +117,7 @@ class ModelsProcessor:
         self._consumer_thread = None
 
     def _process_kafka_messages(self) -> None:
-        topics = [self.settings.kafka_topic]
+        topics = [get_topic_name(self.settings.kafka_topic)]
         logging.info("Starting Kafka message processing on topics: %s", topics)
 
         consumer = consume_messages(

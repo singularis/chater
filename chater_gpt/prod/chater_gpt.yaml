@@ -1,0 +1,36 @@
+- name: Deploy Kubernetes objects for chater application
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - ../../vars.yaml
+
+  tasks:
+    - name: Create ChaterGpt Custom Resource
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: chater.example.com/v1
+          kind: ChaterGpt
+          metadata:
+            name: chater-gpt-operated
+            namespace: chater-gpt
+          spec:
+            namespace: chater-gpt-operated
+            bootstrapServer: "{{ vars.BOOTSTRAP_SERVER }}"
+            model: "{{ vars.MODEL }}"
+            visionModel: "{{ vars.VISION_MODEL }}"
+            openAIAPIKey: "{{ vars.CAPI | b64encode }}"
+            secretKey: "{{ vars.SECRET_KEY | b64encode }}"
+            logLevel: "{{ vars.LOG_LEVEL }}"
+            replicas: 1
+            affinity:
+              nodeAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+                  nodeSelectorTerms:
+                    - matchExpressions:
+                        - key: kubernetes.io/hostname
+                          operator: In
+                          values:
+                            - racoon
+                            - racoon-gpu

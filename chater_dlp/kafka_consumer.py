@@ -2,6 +2,7 @@ import logging
 import os
 
 from confluent_kafka import Consumer, KafkaError
+from dev_utils import get_kafka_group_id
 
 logger = logging.getLogger("kafka_consumer")
 
@@ -15,7 +16,7 @@ def consume_messages(topics):
     consumer = Consumer(
         {
             "bootstrap.servers": os.getenv("BOOTSTRAP_SERVER"),
-            "group.id": "gpt",
+            "group.id": get_kafka_group_id("gpt"),
             "auto.offset.reset": "latest",
             "enable.auto.commit": False,
         }

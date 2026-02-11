@@ -2,7 +2,7 @@ import logging
 import os
 import time
 
-from sqlalchemy import (ARRAY, JSON, Column, Date, Float, ForeignKey, Integer,
+from sqlalchemy import (ARRAY, JSON, BigInteger, Column, Date, Float, ForeignKey, Integer,
                         PrimaryKeyConstraint, String, create_engine, text)
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -44,7 +44,7 @@ class DishesDay(Base):
         {"schema": "public"},
     )
 
-    time = Column(Integer, primary_key=True)
+    time = Column(BigInteger, primary_key=True)
     date = Column(Date, nullable=False)
     dish_name = Column(String, nullable=False)
     estimated_avg_calories = Column(Integer, nullable=False)
@@ -75,7 +75,7 @@ class Weight(Base):
     __tablename__ = "weight"
     __table_args__ = (PrimaryKeyConstraint("time"), {"schema": "public"})
 
-    time = Column(Integer, primary_key=True)
+    time = Column(BigInteger, primary_key=True)
     date = Column(String, nullable=False)
     weight = Column(Float, nullable=False)
     user_email = Column(String, nullable=False)
@@ -85,7 +85,7 @@ class AlcoholConsumption(Base):
     __tablename__ = "alcohol_consumption"
     __table_args__ = (PrimaryKeyConstraint("time"), {"schema": "public"})
 
-    time = Column(Integer, primary_key=True)
+    time = Column(BigInteger, primary_key=True)
     date = Column(Date, nullable=False)
     drink_name = Column(String, nullable=False)
     calories = Column(Integer, nullable=False)

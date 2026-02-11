@@ -23,6 +23,9 @@ PROMPT_FILE = "eater/prompt.yaml"
 # Redis client for rate limiting
 redis_client = redis.StrictRedis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
 
+IS_DEV = os.getenv("IS_DEV", "false").lower() == "true"
+KEY_PREFIX = "_dev:" if IS_DEV else ""
+
 
 def get_jwt_secret_key():
     """
@@ -151,7 +154,7 @@ def check_rate_limit(user_email):
             return True
         # Get current UTC date as key
         current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        redis_key = f"rate_limit:{user_email}:{current_date}"
+        redis_key = f"{KEY_PREFIX}rate_limit:{user_email}:{current_date}"
 
         # Get current count
         current_count = redis_client.get(redis_key)
@@ -218,7 +221,7 @@ def get_prompt(key):
 
 def get_respond_in_language(user_email: str) -> str:
     try:
-        key = f"user_language:{user_email}"
+        key = f"{KEY_PREFIX}user_language:{user_email}"
         cached = redis_client.get(key)
         if cached:
             return cached.decode("utf-8")
@@ -228,7 +231,7 @@ def get_respond_in_language(user_email: str) -> str:
     try:
         language = get_user_language(user_email) or "en"
         try:
-            redis_client.setex(f"user_language:{user_email}", 7 * 24 * 3600, language)
+            redis_client.setex(f"{KEY_PREFIX}user_language:{user_email}", 7 * 24 * 3600, language)
         except Exception:
             pass
         return language

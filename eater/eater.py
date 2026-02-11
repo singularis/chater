@@ -3,6 +3,7 @@ import logging
 import uuid
 
 from common import remove_markdown_fence
+from dev_utils import get_topics_list, get_topic_name, is_dev_environment
 from kafka_consumer import consume_messages, validate_user_data
 from kafka_producer import produce_message
 from logging_config import setup_logging
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def process_messages():
-    topics = [
+    base_topics = [
         "photo-analysis-response",
         "get_today_data",
         "get_today_data_custom",
@@ -31,6 +32,9 @@ def process_messages():
         "get_chess_stats",
         "get_all_chess_data",
     ]
+    topics = get_topics_list(base_topics)
+    if is_dev_environment():
+        logger.info("Running in DEV environment - using _dev topic suffix")
     logger.info(f"Starting message processing with topics: {topics}")
     while True:
         for message, consumer in consume_messages(topics):
@@ -61,7 +65,7 @@ def process_messages():
 
                 consumer.commit(message)
 
-                if message.topic() == "photo-analysis-response":
+                if message.topic() == get_topic_name("photo-analysis-response"):
                     gpt_response = value_dict.get("value", {})
                     if isinstance(gpt_response, str):
                         gpt_response = remove_markdown_fence(gpt_response)
@@ -143,7 +147,7 @@ def process_messages():
                                 },
                             },
                         )
-                elif message.topic() == "get_today_data":
+                elif message.topic() == get_topic_name("get_today_data"):
                     today_dishes = get_today_dishes(user_email)
                     logger.debug(f"Received request to get food for user {user_email}")
                     message = {
@@ -151,7 +155,7 @@ def process_messages():
                         "value": {"dishes": today_dishes, "user_email": user_email},
                     }
                     produce_message(topic="send_today_data", message=message)
-                elif message.topic() == "get_today_data_custom":
+                elif message.topic() == get_topic_name("get_today_data_custom"):
                     custom_date = value_dict.get("value", {}).get("date")
                     if not custom_date:
                         logger.warning(
@@ -167,7 +171,7 @@ def process_messages():
                         "value": {"dishes": custom_dishes, "user_email": user_email},
                     }
                     produce_message(topic="send_today_data_custom", message=message)
-                elif message.topic() == "get_alcohol_latest":
+                elif message.topic() == get_topic_name("get_alcohol_latest"):
                     today_dishes = get_today_dishes(user_email)
                     alcohol = (today_dishes or {}).get("alcohol_for_day", {})
                     resp = {"alcohol": alcohol, "user_email": user_email}
@@ -175,7 +179,7 @@ def process_messages():
                         topic="send_alcohol_latest",
                         message={"key": message_key, "value": resp},
                     )
-                elif message.topic() == "get_alcohol_range":
+                elif message.topic() == get_topic_name("get_alcohol_range"):
                     value = value_dict.get("value", {})
                     start_date = value.get("start_date")
                     end_date = value.get("end_date")
@@ -195,7 +199,7 @@ def process_messages():
                             "value": {"events": events, "user_email": user_email},
                         },
                     )
-                elif message.topic() == "delete_food":
+                elif message.topic() == get_topic_name("delete_food"):
                     delete_food(value_dict.get("value"), user_email)
                     # Send confirmation
                     produce_message(
@@ -205,7 +209,7 @@ def process_messages():
                             "value": {"status": "Success", "user_email": user_email},
                         },
                     )
-                elif message.topic() == "modify_food_record":
+                elif message.topic() == get_topic_name("modify_food_record"):
                     modify_food(value_dict.get("value"), user_email)
                     # Send confirmation
                     produce_message(
@@ -215,11 +219,11 @@ def process_messages():
                             "value": {"status": "Success", "user_email": user_email},
                         },
                     )
-                elif message.topic() == "get_recommendation":
+                elif message.topic() == get_topic_name("get_recommendation"):
                     get_recommendation(
                         message_key, value_dict.get("value"), value_dict, user_email
                     )
-                elif message.topic() == "manual_weight":
+                elif message.topic() == get_topic_name("manual_weight"):
                     # Handle messages from manual_weight endpoint
                     response_data = value_dict.get("value", {})
                     message_type = response_data.get("type")
@@ -236,7 +240,7 @@ def process_messages():
                         logger.warning(
                             f"Unknown message type '{message_type}' in manual_weight for user {user_email}"
                         )
-                elif message.topic() == "get_food_health_level":
+                elif message.topic() == get_topic_name("get_food_health_level"):
                     request_data = value_dict.get("value", {})
                     time_value = request_data.get("time")
                     food_name = request_data.get("food_name")

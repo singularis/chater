@@ -3,6 +3,7 @@ import logging
 import os
 
 from confluent_kafka import Producer
+from dev_utils import get_topic_name
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ def delivery_report(err, msg):
 
 
 def produce_message(topic, message):
+    topic = get_topic_name(topic)
     try:
         # Ensure message has a value field
         if "value" not in message:

@@ -5,6 +5,7 @@ import time
 
 from confluent_kafka import Consumer, KafkaError, KafkaException
 from logging_config import setup_logging
+from dev_utils import get_kafka_group_id
 
 setup_logging("kafka_consumer.log")
 logger = logging.getLogger("kafka_consumer")
@@ -20,7 +21,7 @@ def create_consumer(topics):
         consumer = Consumer(
             {
                 "bootstrap.servers": os.getenv("BOOTSTRAP_SERVER"),
-                "group.id": "chater",
+                "group.id": get_kafka_group_id("chater"),
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": True,
                 "max.poll.interval.ms": 300000,

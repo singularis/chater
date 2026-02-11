@@ -5,6 +5,7 @@ import time
 
 from confluent_kafka import Consumer, KafkaError, KafkaException
 from logging_config import setup_logging
+from dev_utils import get_topics_list, get_kafka_group_id
 
 setup_logging("kafka_consumer.log")
 logger = logging.getLogger("kafka_consumer")
@@ -28,7 +29,7 @@ def create_consumer(topics):
         consumer = Consumer(
             {
                 "bootstrap.servers": bootstrap_servers,
-                "group.id": "chater",
+                "group.id": get_kafka_group_id("chater"),
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": True,
                 "max.poll.interval.ms": 300000,
@@ -42,6 +43,7 @@ def create_consumer(topics):
         def on_revoke(consumer, partitions):
             logger.info(f"Partitions revoked: {partitions}")
 
+        topics = get_topics_list(topics)
         consumer.subscribe(topics, on_assign=on_assign, on_revoke=on_revoke)
         logger.info(f"Subscribed to topics: {topics}")
         return consumer
