@@ -244,6 +244,60 @@ def modify_food_record(request, user_email):
         return response_data, 500, {"Content-Type": "application/grpc+proto"}
 
 
+def modify_food_manual(request, user_email):
+    """
+    Lightweight JSON endpoint to allow manual dish name correction without
+    going through protobuf on the UI side.
+    Expects JSON body: { "time": int, "manual_food_name": str }
+    """
+    try:
+        data = request.get_json(silent=False) or {}
+    except Exception:
+        logger.exception("Failed to parse JSON body for modify_food_manual (user %s)", user_email)
+        return _json_error(400, "Invalid JSON body")
+
+    time_value = data.get("time")
+    manual_food_name = data.get("manual_food_name") or data.get("dish_name")
+
+    if not time_value or not isinstance(time_value, (int, float)):
+        return _json_error(400, "Missing or invalid 'time'")
+    if not manual_food_name or not isinstance(manual_food_name, str):
+        return _json_error(400, "Missing or invalid 'manual_food_name'")
+
+    payload = {
+        "time": int(time_value),
+        "user_email": user_email,
+        # Keep percentage at 100 so only name changes (no rescaling)
+        "percentage": 100,
+        "manual_food_name": manual_food_name,
+    }
+
+    message_id, error = _dispatch_kafka_request(
+        topic="modify_food_record", payload=payload, user_email=user_email
+    )
+    if error:
+        status, message = error
+        return _json_error(status, message)
+
+    logger.debug(
+        "Manual food rename dispatched for user %s (message_id=%s, time=%s, new_name=%s)",
+        user_email,
+        message_id,
+        time_value,
+        manual_food_name,
+    )
+
+    # Wait for confirmation from background consumer service
+    modify_food_response = modify_food_record_pb2.ModifyFoodRecordResponse()
+    response_data, status = _await_user_response(
+        message_id, user_email, timeout=30, proto_response=modify_food_response
+    )
+
+    # For JSON clients, translate proto-style response into JSON
+    success = status == 200 and modify_food_response.success
+    return jsonify({"success": success}), (200 if success else 500)
+
+
 def manual_weight(request, user_email):
     manual_weight_response = manual_weight_pb2.ManualWeightResponse()
     manual_weight_request = manual_weight_pb2.ManualWeightRequest()

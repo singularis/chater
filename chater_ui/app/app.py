@@ -27,7 +27,8 @@ from eater.eater import (alcohol_latest, alcohol_range, delete_food_record,
                          eater_auth_request, eater_custom_date, eater_photo,
                          eater_today, food_health_level, get_photo_file,
                          get_recommendations, manual_weight_record,
-                         modify_food_record_data, set_language)
+                         modify_food_manual_data, modify_food_record_data,
+                         set_language)
 from eater.chess import (get_all_chess_data_request, get_chess_stats_request,
                          record_chess_game_request)
 from eater.feedback import submit_feedback_request
@@ -312,6 +313,13 @@ def delete_food(user_email):
 @token_required
 def modify_food(user_email):
     return modify_food_record_data(request=request, user_email=user_email)
+
+
+@app.route(dev_route("/modify_food_manual"), methods=["POST"])
+@track_eater_operation("modify_food_manual")
+@token_required
+def modify_food_manual(user_email):
+    return modify_food_manual_data(request=request, user_email=user_email)
 
 
 @app.route(dev_route("/get_recommendation"), methods=["POST"])
