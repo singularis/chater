@@ -43,7 +43,7 @@
               spec:
                 containers:
                   - name: chater-ui
-                    image: docker.io/singularis314/chater-ui:0.5.1
+                    image: docker.io/singularis314/chater-ui:0.5.2
                     imagePullPolicy: IfNotPresent
                     ports:
                       - containerPort: 5000
