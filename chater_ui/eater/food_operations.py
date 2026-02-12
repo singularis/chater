@@ -1,12 +1,18 @@
 import logging
 import uuid
 
-from flask import jsonify
+import base64
+import os
+
+from flask import current_app, jsonify
 from kafka_consumer_service import get_user_message_response
 from kafka_producer import KafkaDispatchError, send_kafka_message
 
+from local_models_helper import LocalModelService
+
 from .proto import (alcohol_pb2, delete_food_pb2, manual_weight_pb2,
                     modify_food_record_pb2)
+from .process_photo import _dispatch_photo_message
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +171,72 @@ def modify_food_record(request, user_email):
             "manual_insight": manual_insight,
             "manual_components": manual_components,
         }
+
+        # If user is manually correcting the dish and wants a recalculation,
+        # rerun photo analysis using the existing image_id and overwrite the existing record.
+        if is_try_again and image_id:
+            client = current_app.config.get("MINIO_CLIENT")
+            if client is None:
+                return _json_error(500, "MinIO client not available for try-again")
+
+            bucket_name = os.getenv("MINIO_BUCKET_EATER", "eater")
+            target_image_id = image_id if "/" in image_id else f"{user_email}/{image_id}"
+
+            try:
+                obj = client.get_object(bucket_name, target_image_id)
+                photo_bytes = obj.read()
+                try:
+                    obj.close()
+                except Exception:
+                    pass
+            except Exception:
+                logger.exception("Failed to fetch image %s for user %s", target_image_id, user_email)
+                return _json_error(500, "Failed to fetch image for try-again")
+
+            photo_base64 = base64.b64encode(photo_bytes).decode("utf-8")
+            message_id = str(uuid.uuid4())
+            local_model_service = LocalModelService()
+
+            suffix = None
+            if manual_food_name:
+                suffix = (
+                    "IMPORTANT: The user corrected the dish name. "
+                    f"Use exactly this value as dish_name: {manual_food_name!r}. "
+                    "Do NOT guess another name."
+                )
+
+            try:
+                _dispatch_photo_message(
+                    photo_base64=photo_base64,
+                    type_of_processing="default_prompt",
+                    user_email=user_email,
+                    message_id=message_id,
+                    local_model_service=local_model_service,
+                    image_path=image_id,
+                    timestamp=str(time),
+                    date=None,
+                    prompt_suffix=suffix,
+                )
+            except KafkaDispatchError as error:
+                return _json_error(error.status_code, str(error))
+
+            # Wait for completion signal (same mechanism as eater_receive_photo)
+            response = get_user_message_response(message_id, user_email, timeout=60)
+            if not response or response.get("error"):
+                modify_food_response.success = False
+                return (
+                    modify_food_response.SerializeToString(),
+                    500,
+                    {"Content-Type": "application/grpc+proto"},
+                )
+
+            modify_food_response.success = True
+            return (
+                modify_food_response.SerializeToString(),
+                200,
+                {"Content-Type": "application/grpc+proto"},
+            )
+
         message_id, error = _dispatch_kafka_request(
             topic="modify_food_record",
             payload=payload,

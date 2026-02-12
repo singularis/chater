@@ -169,22 +169,39 @@ def write_to_dish_day(
                 else:
                     time_to_store = int(datetime.now().timestamp())
 
-                # Insert the new dish entry
-                dish_day = DishesDay(
-                    time=time_to_store,
-                    date=storage_date,
-                    dish_name=dish_name,
-                    estimated_avg_calories=estimated_avg_calories,
-                    ingredients=ingredients,
-                    total_avg_weight=total_avg_weight,
-                    health_rating=health_rating,
-                    food_health_level=food_health_level_str,
-                    contains=contains,
-                    user_email=user_email,
-                    image_id=image_id,
+                # Upsert: overwrite existing record for same time/user (used by manual re-analysis)
+                dish_day = (
+                    session.query(DishesDay)
+                    .filter(DishesDay.time == time_to_store)
+                    .filter(DishesDay.user_email == user_email)
+                    .first()
                 )
 
-                session.add(dish_day)
+                if dish_day:
+                    dish_day.date = storage_date
+                    dish_day.dish_name = dish_name
+                    dish_day.estimated_avg_calories = estimated_avg_calories
+                    dish_day.ingredients = ingredients
+                    dish_day.total_avg_weight = total_avg_weight
+                    dish_day.health_rating = health_rating
+                    dish_day.food_health_level = food_health_level_str
+                    dish_day.contains = contains
+                    dish_day.image_id = image_id
+                else:
+                    dish_day = DishesDay(
+                        time=time_to_store,
+                        date=storage_date,
+                        dish_name=dish_name,
+                        estimated_avg_calories=estimated_avg_calories,
+                        ingredients=ingredients,
+                        total_avg_weight=total_avg_weight,
+                        health_rating=health_rating,
+                        food_health_level=food_health_level_str,
+                        contains=contains,
+                        user_email=user_email,
+                        image_id=image_id,
+                    )
+                    session.add(dish_day)
 
                 # If the dish is alcohol, record alcohol consumption
                 try:
@@ -625,7 +642,7 @@ def modify_food(data, user_email: str = None):
                 time_value = data.get("time")
                 user_email = data.get("user_email", user_email)
                 percentage = data.get("percentage", 100)
-                added_sugar_tsp = data.get("added_sugar_tsp", 0.0)
+                added_sugar_tsp = float(data.get("added_sugar_tsp") or 0.0)
                 is_try_again = data.get("is_try_again", False)
                 image_id = data.get("image_id", "")
                 manual_food_name = data.get("manual_food_name", "")
@@ -691,6 +708,36 @@ def modify_food(data, user_email: str = None):
                     food_record.ingredients = manual_components
                     modified = True
                     logger.info(f"Manual ingredients updated: {manual_components}")
+
+                # Added sugar: persist tsp and update calories/grams/contains/health rating.
+                # (1 tsp sugar ≈ 5g, ≈ 20 kcal)
+                if added_sugar_tsp and added_sugar_tsp > 0:
+                    existing = float(getattr(food_record, "added_sugar_tsp", 0.0) or 0.0)
+                    food_record.added_sugar_tsp = existing + added_sugar_tsp
+
+                    # Update dish totals (do not scale existing dish; add on top)
+                    food_record.estimated_avg_calories = int(
+                        (food_record.estimated_avg_calories or 0) + (20 * added_sugar_tsp)
+                    )
+                    food_record.total_avg_weight = int(
+                        (food_record.total_avg_weight or 0) + (5 * added_sugar_tsp)
+                    )
+
+                    # Update nutrition map if present
+                    if food_record.contains and isinstance(food_record.contains, dict):
+                        sugar_g = 5 * added_sugar_tsp
+                        food_record.contains["sugar"] = float(food_record.contains.get("sugar", 0) or 0) + sugar_g
+                        food_record.contains["carbohydrates"] = float(food_record.contains.get("carbohydrates", 0) or 0) + sugar_g
+
+                    # Penalize health rating for added sugar (10 points per tsp)
+                    try:
+                        base = int(getattr(food_record, "health_rating", 0) or 0)
+                        food_record.health_rating = max(0, min(100, base - int(10 * added_sugar_tsp)))
+                    except Exception:
+                        pass
+
+                    modified = True
+                    logger.info(f"Sugar added: +{added_sugar_tsp} tsp")
                 
                 # Handle percentage modification (original functionality)
                 if percentage != 100:

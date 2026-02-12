@@ -78,7 +78,7 @@ app.config.update(
 Session(app)
 
 picFolder = "/app/app/static/pics"
-SESSION_LIFETIME = int(os.getenv("SESSION_LIFETIME"))
+SESSION_LIFETIME = int(os.getenv("SESSION_LIFETIME", "3600"))
 ALLOWED_EMAILS = os.getenv("ALLOWED_EMAILS", "").split(",")
 
 google_bp = create_google_blueprint()

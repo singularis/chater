@@ -1,3 +1,5 @@
+venv/
+creds.txt
 vars.yaml
 .idea
 __pycache__
@@ -47,6 +49,9 @@ build/
 .DS_Store
 
 inventory
+
+# Local duplicates/backups (Cursor/OS folder copies)
+_duplicates/
 
 ### Documentation ###
 docs/
