@@ -9,7 +9,7 @@ cd "$SCRIPT_DIR"
 IMAGE_TAG="0.5.2"
 IMAGE="docker.io/singularis314/chater-ui:${IMAGE_TAG}"
 
-docker buildx build --platform linux/amd64,linux/arm64 -t "${IMAGE}" --push .
+docker buildx build --platform linux/amd64,linux/arm64 -t "${IMAGE}" --push ..
 
 # Avoid DockerHub rate-limit loops: do not always pull if image is present on node
 kubectl patch deployment chater-ui -n chater-ui --type='json' -p='[

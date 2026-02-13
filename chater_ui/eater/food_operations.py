@@ -321,6 +321,12 @@ def modify_food_manual(request, user_email):
     Lightweight JSON endpoint to allow manual dish name correction without
     going through protobuf on the UI side.
     Expects JSON body: { "time": int, "manual_food_name": str }
+
+    This request can take several seconds (Kafka + eater service). Clients should
+    show a loading state between "Save" and the success message. Chater UI provides
+    a ready-made overlay: include static/css/loading-overlay.css and
+    static/js/loading-overlay.js, then call loadingOverlay.show() before the
+    request and loadingOverlay.hide() in a finally() block.
     """
     try:
         data = request.get_json(silent=False) or {}

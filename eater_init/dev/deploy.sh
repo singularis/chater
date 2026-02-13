@@ -1,5 +1,6 @@
 #! /bin/bash
 
-docker build -t docker.io/singularis314/eater-init-dev:0.1 .
-docker push docker.io/singularis314/eater-init-dev:0.1
+set -e
+
+docker buildx build --platform linux/amd64 -t docker.io/singularis314/eater-init-dev:0.1 --push .
 kubectl rollout restart -n eater-dev deployment eater-dev

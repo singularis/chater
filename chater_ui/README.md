@@ -181,6 +181,23 @@ class KafkaConsumerService:
 - Meal recommendations
 - Weight tracking graphs
 
+### Loading overlay (manual dish name / long requests)
+For endpoints that can take several seconds (e.g. `POST /modify_food_manual`), show a loading state so the user sees that the request is in progress:
+
+1. Include assets (adjust base URL if using a dev/prod prefix):
+   ```html
+   <link rel="stylesheet" href="/static/css/loading-overlay.css">
+   <script src="/static/js/loading-overlay.js"></script>
+   ```
+2. Before calling the API, show the overlay; in `finally()`, hide it:
+   ```javascript
+   loadingOverlay.show('Обробка запиту…');  // or your message
+   fetch('/modify_food_manual', { method: 'POST', ... })
+     .then(function (r) { ... })
+     .catch(function (e) { ... })
+     .finally(function () { loadingOverlay.hide(); });
+   ```
+
 ### Authentication UI
 - Login/logout forms
 - Google OAuth integration

@@ -1,7 +1,8 @@
 #! /bin/bash
 
-docker build --platform linux/amd64 -t singularis314/chater-ui-dev:0.5 .
-docker push singularis314/chater-ui-dev:0.5
+set -e
+
+docker buildx build --platform linux/amd64 -t docker.io/singularis314/chater-ui-dev:0.5 --push ..
 kubectl rollout restart -n chater-ui-dev deployment chater-ui-dev
 kubectl rollout status -n chater-ui-dev deployment chater-ui-dev --watch
 for i in {1..10}; do
