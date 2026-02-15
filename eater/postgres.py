@@ -1009,7 +1009,8 @@ def get_chess_stats_sync(user_email: str, opponent_email: Optional[str] = None):
 
 
 def get_all_chess_data_sync(user_email: str):
-    """Return total_wins and opponents dict {email: 'wins:losses'}. None on error."""
+    """Return total_wins and opponents dict {email: 'wins:losses'}.
+    Returns {"total_wins": 0, "opponents": {}} when no data exists."""
     try:
         with get_db_session() as session:
             total_row = session.execute(
@@ -1025,8 +1026,8 @@ def get_all_chess_data_sync(user_email: str):
             opp_rows = session.execute(
                 text("""
                     SELECT opponent_email,
-                           COUNT(*) FILTER (WHERE result = 'win') AS wins,
-                           COUNT(*) FILTER (WHERE result = 'loss') AS losses
+                           SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) AS wins,
+                           SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) AS losses
                     FROM chess_games
                     WHERE player_email = :user_email
                     GROUP BY opponent_email
@@ -1039,4 +1040,4 @@ def get_all_chess_data_sync(user_email: str):
             return {"total_wins": total_wins, "opponents": opponents}
     except Exception as e:
         logger.exception("get_all_chess_data_sync failed: %s", e)
-        return None
+        return {"total_wins": 0, "opponents": {}}

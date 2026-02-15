@@ -373,7 +373,7 @@ def create_tables():
                         id SERIAL PRIMARY KEY,
                         player_email TEXT NOT NULL,
                         opponent_email TEXT NOT NULL,
-                        result TEXT NOT NULL,
+                        result TEXT NOT NULL CHECK (result IN ('win', 'loss', 'draw')),
                         timestamp BIGINT NOT NULL,
                         created_at TIMESTAMP DEFAULT NOW()
                     )
@@ -382,7 +382,7 @@ def create_tables():
                     "CREATE INDEX IF NOT EXISTS idx_chess_player ON chess_games(player_email)"
                 ))
                 connection.execute(text(
-                    "CREATE INDEX IF NOT EXISTS idx_chess_opponent ON chess_games(opponent_email)"
+                    "CREATE INDEX IF NOT EXISTS idx_chess_opponent ON chess_games(player_email, opponent_email)"
                 ))
                 connection.execute(text(
                     "CREATE INDEX IF NOT EXISTS idx_chess_timestamp ON chess_games(timestamp DESC)"

@@ -15,7 +15,8 @@ from dev_utils import get_topic_name
 from logging_config import setup_logging
 from neo4j_connection import neo4j_connection
 from postgres import (autocomplete_query, database, get_food_record_by_time,
-                      ensure_nickname_column, update_nickname, get_nickname)
+                      ensure_nickname_column, update_nickname, get_nickname,
+                      record_chess_game, get_chess_stats, get_all_chess_data)
 from proto import add_friend_pb2, get_friends_pb2, share_food_pb2
 from starlette.websockets import WebSocketState
 
@@ -419,6 +420,101 @@ async def websocket_autocomplete(websocket: WebSocket):
     except Exception:
         if user_email:
             manager.disconnect(websocket, user_email)
+
+
+# MARK: - Chess Game Endpoints
+
+
+@app.post("/autocomplete/record_chess_game")
+@token_required
+async def record_chess_game_endpoint(request: Request, user_email: str):
+    """Record a chess game result between user and opponent.
+    Request body: {player_email, opponent_email, result, timestamp}
+    """
+    try:
+        body = await request.json()
+
+        player_email = (body.get("player_email") or "").strip()
+        opponent_email = (body.get("opponent_email") or "").strip()
+        result = (body.get("result") or "").strip()
+        timestamp = int(body.get("timestamp") or 0)
+
+        if not player_email or not opponent_email:
+            raise HTTPException(status_code=400, detail="player_email and opponent_email required")
+        if player_email != user_email:
+            raise HTTPException(status_code=403, detail="Cannot record game for another user")
+        if result not in ("win", "loss", "draw"):
+            raise HTTPException(status_code=400, detail="result must be win, loss, or draw")
+
+        ok = await record_chess_game(player_email, opponent_email, result, timestamp)
+        if not ok:
+            raise HTTPException(status_code=500, detail="Failed to record game")
+
+        # Fetch updated stats for both players against each other
+        player_stats = await get_chess_stats(player_email, opponent_email)
+        opponent_stats = await get_chess_stats(opponent_email, player_email)
+
+        return {
+            "success": True,
+            "player_wins": (player_stats or {}).get("wins", 0),
+            "player_losses": (player_stats or {}).get("losses", 0),
+            "opponent_wins": (opponent_stats or {}).get("wins", 0),
+            "opponent_losses": (opponent_stats or {}).get("losses", 0),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("record_chess_game_endpoint failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/autocomplete/get_chess_stats")
+@token_required
+async def get_chess_stats_endpoint(request: Request, user_email: str):
+    """Get chess stats for user vs a specific opponent (or last opponent).
+    Optional body: {opponent_email: "..."}
+    """
+    try:
+        body = await request.json()
+        opponent_email = (body.get("opponent_email") or "").strip() or None
+
+        stats = await get_chess_stats(user_email, opponent_email)
+        if stats is None:
+            return {
+                "score": "0:0",
+                "opponent_name": "",
+                "last_game_date": "",
+            }
+
+        return {
+            "score": stats.get("score", "0:0"),
+            "opponent_name": stats.get("opponent_name", ""),
+            "last_game_date": stats.get("last_game_date", ""),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("get_chess_stats_endpoint failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/autocomplete/get_all_chess_data")
+@token_required
+async def get_all_chess_data_endpoint(request: Request, user_email: str):
+    """Get total wins + per-opponent scores for the authenticated user.
+    Automatically uses the correct environment (dev/prod) for data isolation.
+    """
+    try:
+        data = await get_all_chess_data(user_email)
+        return {
+            "total_wins": data.get("total_wins", 0),
+            "opponents": data.get("opponents", {}),
+        }
+    except Exception as e:
+        logger.exception("get_all_chess_data_endpoint failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 if __name__ == "__main__":

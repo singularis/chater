@@ -1,6 +1,9 @@
 import os
+import logging
 
 from databases import Database
+
+logger = logging.getLogger(__name__)
 
 POSTGRES_USER = os.getenv("POSTGRES_USER", "eater")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
@@ -150,9 +153,12 @@ async def get_food_record_by_time(time: int, user_email: str):
 # MARK: - Chess Games Functions
 
 
+
+
+
 async def record_chess_game(player_email: str, opponent_email: str, result: str, timestamp: int):
     """
-    Record a chess game for both players
+    Record a chess game for both players.
     result: "win", "loss", or "draw"
     """
     try:
@@ -165,9 +171,9 @@ async def record_chess_game(player_email: str, opponent_email: str, result: str,
             "player_email": player_email,
             "opponent_email": opponent_email,
             "result": result,
-            "timestamp": timestamp
+            "timestamp": timestamp,
         })
-        
+
         # Record mirror game for opponent
         opponent_result = "loss" if result == "win" else ("win" if result == "loss" else "draw")
         query_opponent = """
@@ -178,21 +184,21 @@ async def record_chess_game(player_email: str, opponent_email: str, result: str,
             "player_email": opponent_email,
             "opponent_email": player_email,
             "result": opponent_result,
-            "timestamp": timestamp
+            "timestamp": timestamp,
         })
-        
+
         return True
-    except Exception:
+    except Exception as e:
+        logger.exception("record_chess_game failed: %s", e)
         return False
 
 
 async def get_chess_stats(user_email: str, opponent_email: str = None):
-    """Get chess statistics for a user against specific opponent or overall"""
+    """Get chess statistics for a user against specific opponent or last opponent."""
     try:
         if opponent_email:
-            # Get stats against specific opponent
             query = """
-            SELECT 
+            SELECT
                 COUNT(*) FILTER (WHERE result = 'win') as wins,
                 COUNT(*) FILTER (WHERE result = 'loss') as losses,
                 COUNT(*) FILTER (WHERE result = 'draw') as draws,
@@ -202,10 +208,10 @@ async def get_chess_stats(user_email: str, opponent_email: str = None):
             """
             row = await database.fetch_one(query, values={
                 "user_email": user_email,
-                "opponent_email": opponent_email
+                "opponent_email": opponent_email,
             })
         else:
-            # Get overall stats (last opponent)
+            # Find last opponent
             query_last = """
             SELECT opponent_email, timestamp
             FROM chess_games
@@ -213,16 +219,17 @@ async def get_chess_stats(user_email: str, opponent_email: str = None):
             ORDER BY timestamp DESC
             LIMIT 1
             """
-            last_game = await database.fetch_one(query_last, values={"user_email": user_email})
-            
+            last_game = await database.fetch_one(query_last, values={
+                "user_email": user_email,
+            })
+
             if not last_game:
                 return None
-            
+
             opponent_email = last_game["opponent_email"]
-            
-            # Get stats against last opponent
+
             query = """
-            SELECT 
+            SELECT
                 COUNT(*) FILTER (WHERE result = 'win') as wins,
                 COUNT(*) FILTER (WHERE result = 'loss') as losses,
                 COUNT(*) FILTER (WHERE result = 'draw') as draws,
@@ -232,17 +239,17 @@ async def get_chess_stats(user_email: str, opponent_email: str = None):
             """
             row = await database.fetch_one(query, values={
                 "user_email": user_email,
-                "opponent_email": opponent_email
+                "opponent_email": opponent_email,
             })
-        
+
         if row:
             wins = row["wins"] or 0
             losses = row["losses"] or 0
-            
+
             # Get opponent nickname
             opponent_nickname = await get_nickname(opponent_email)
             opponent_name = opponent_nickname if opponent_nickname else opponent_email
-            
+
             # Format last game date
             import datetime
             last_timestamp = row["last_game_timestamp"]
@@ -250,14 +257,55 @@ async def get_chess_stats(user_email: str, opponent_email: str = None):
             if last_timestamp:
                 dt = datetime.datetime.fromtimestamp(last_timestamp / 1000, tz=datetime.timezone.utc)
                 last_date = dt.strftime("%Y-%m-%d")
-            
+
             return {
                 "score": f"{wins}:{losses}",
                 "opponent_name": opponent_name,
                 "opponent_email": opponent_email,
-                "last_game_date": last_date
+                "last_game_date": last_date,
+                "wins": wins,
+                "losses": losses,
             }
-        
+
         return None
-    except Exception:
+    except Exception as e:
+        logger.exception("get_chess_stats failed: %s", e)
         return None
+
+
+async def get_all_chess_data(user_email: str):
+    """Return total_wins and opponents dict {email: 'wins:losses'} for the user.
+    Returns {"total_wins": 0, "opponents": {}} when no data exists."""
+    try:
+        # Total wins for user
+        total_row = await database.fetch_one(
+            """
+            SELECT COUNT(*) as total_wins
+            FROM chess_games
+            WHERE player_email = :user_email AND result = 'win'
+            """,
+            values={"user_email": user_email},
+        )
+        total_wins = int(total_row["total_wins"] or 0) if total_row else 0
+
+        # Per-opponent breakdown
+        opp_rows = await database.fetch_all(
+            """
+            SELECT
+                opponent_email,
+                SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as my_wins,
+                SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) as opponent_wins
+            FROM chess_games
+            WHERE player_email = :user_email
+            GROUP BY opponent_email
+            """,
+            values={"user_email": user_email},
+        )
+        opponents = {}
+        for r in opp_rows:
+            opponents[r["opponent_email"]] = f"{r['my_wins'] or 0}:{r['opponent_wins'] or 0}"
+
+        return {"total_wins": total_wins, "opponents": opponents}
+    except Exception as e:
+        logger.exception("get_all_chess_data failed: %s", e)
+        return {"total_wins": 0, "opponents": {}}

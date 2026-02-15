@@ -14,7 +14,7 @@ deployed_folders=()
 
 # Find all subdirectories with a prod/deploy.sh and run it.
 # Use -print0 to safely handle spaces in folder names.
-find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' dir; do
+while IFS= read -r -d '' dir; do
     folder_name="$(basename "$dir")"
     deploy_script="$dir/prod/deploy.sh"
     if [ -f "$deploy_script" ]; then
@@ -24,7 +24,7 @@ find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r
         cd "$PROJECT_DIR"
         deployed_folders+=("$folder_name")
     fi
-done < <(find "$SCRIPT_DIR" -mindepth 1 -maxdepth 1 -type d -print0)
+done < <(find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 -type d -print0)
 
 echo -e "\nDeployment Summary:"
 echo "------------------"
