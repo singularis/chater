@@ -16,7 +16,8 @@ from logging_config import setup_logging
 from neo4j_connection import neo4j_connection
 from postgres import (autocomplete_query, database, get_food_record_by_time,
                       ensure_nickname_column, update_nickname, get_nickname,
-                      record_chess_game, get_chess_stats, get_all_chess_data)
+                      record_chess_game, get_chess_stats, get_all_chess_data,
+                      get_chess_history)
 from proto import add_friend_pb2, get_friends_pb2, share_food_pb2
 from starlette.websockets import WebSocketState
 
@@ -503,17 +504,40 @@ async def get_chess_stats_endpoint(request: Request, user_email: str):
 @app.get("/autocomplete/get_all_chess_data")
 @token_required
 async def get_all_chess_data_endpoint(request: Request, user_email: str):
-    """Get total wins + per-opponent scores for the authenticated user.
-    Automatically uses the correct environment (dev/prod) for data isolation.
+    """Get total stats + per-opponent scores and game history for the authenticated user.
+    Returns total_wins, total_losses, total_draws, and for each opponent:
+    score, wins, losses, draws, nickname, last_game_date, and games[] array.
     """
     try:
         data = await get_all_chess_data(user_email)
         return {
             "total_wins": data.get("total_wins", 0),
+            "total_losses": data.get("total_losses", 0),
+            "total_draws": data.get("total_draws", 0),
             "opponents": data.get("opponents", {}),
         }
     except Exception as e:
         logger.exception("get_all_chess_data_endpoint failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/autocomplete/get_chess_history")
+@token_required
+async def get_chess_history_endpoint(request: Request, user_email: str):
+    """Get paginated game history for the authenticated user.
+    Query params: limit (default 50), offset (default 0).
+    Returns {games: [{opponent_email, opponent_nickname, result, date, time, timestamp}], total, limit, offset}.
+    """
+    try:
+        limit = int(request.query_params.get("limit", 50))
+        offset = int(request.query_params.get("offset", 0))
+        limit = min(max(limit, 1), 200)  # clamp to 1-200
+        offset = max(offset, 0)
+
+        data = await get_chess_history(user_email, limit=limit, offset=offset)
+        return data
+    except Exception as e:
+        logger.exception("get_chess_history_endpoint failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

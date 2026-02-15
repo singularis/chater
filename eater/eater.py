@@ -365,6 +365,8 @@ def process_messages():
                             "value": {
                                 "user_email": user_email,
                                 "total_wins": (data or {}).get("total_wins", 0),
+                                "total_losses": (data or {}).get("total_losses", 0),
+                                "total_draws": (data or {}).get("total_draws", 0),
                                 "opponents": (data or {}).get("opponents", {}),
                             },
                         },
