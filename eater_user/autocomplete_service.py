@@ -16,6 +16,7 @@ from logging_config import setup_logging
 from neo4j_connection import neo4j_connection
 from postgres import (autocomplete_query, database, get_food_record_by_time,
                       ensure_nickname_column, update_nickname, get_nickname,
+                      nickname_is_taken,
                       record_chess_game, get_chess_stats, get_all_chess_data,
                       get_chess_history)
 from proto import add_friend_pb2, get_friends_pb2, share_food_pb2
@@ -111,6 +112,18 @@ async def add_friend_endpoint(request: Request, user_email: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+def _normalize_nickname(raw: str) -> str:
+    return raw.strip().lower()
+
+
+def _nickname_valid(raw: str) -> bool:
+    """Only Latin lowercase letters and digits allowed."""
+    if not raw or len(raw) > 50:
+        return False
+    normalized = _normalize_nickname(raw)
+    return len(normalized) >= 1 and all(c.isascii() and (c.islower() or c.isdigit()) for c in normalized)
+
+
 @app.post("/autocomplete/update_nickname")
 @token_required
 async def update_nickname_endpoint(request: Request, user_email: str):
@@ -119,12 +132,22 @@ async def update_nickname_endpoint(request: Request, user_email: str):
         nickname = body.get("nickname")
         if not nickname:
             raise HTTPException(status_code=400, detail="Nickname required")
-            
+
         nickname = nickname.strip()
         if len(nickname) < 1 or len(nickname) > 50:
-             raise HTTPException(status_code=400, detail="Nickname length invalid")
+            raise HTTPException(status_code=400, detail="Nickname length invalid")
 
-        await update_nickname(user_email, nickname)
+        if not _nickname_valid(nickname):
+            raise HTTPException(
+                status_code=400,
+                detail="Nickname must contain only Latin lowercase letters and digits (a-z, 0-9)"
+            )
+
+        normalized = _normalize_nickname(nickname)
+        if await nickname_is_taken(normalized, exclude_email=user_email):
+            raise HTTPException(status_code=409, detail="Nickname already taken")
+
+        await update_nickname(user_email, normalized)
         return {"success": True}
 
     except HTTPException:

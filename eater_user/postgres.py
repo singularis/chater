@@ -48,6 +48,25 @@ async def ensure_nickname_column():
         pass
 
 
+async def nickname_is_taken(nickname: str, exclude_email: str) -> bool:
+    """True if another user (different email) already has this nickname (case-insensitive)."""
+    try:
+        query = '''
+            SELECT 1 FROM "user"
+            WHERE lower(trim(nickname)) = lower(:nickname)
+            AND lower(email) != lower(:exclude_email)
+            AND nickname IS NOT NULL AND trim(nickname) != ''
+            LIMIT 1
+        '''
+        row = await database.fetch_one(
+            query,
+            values={"nickname": nickname.strip(), "exclude_email": exclude_email}
+        )
+        return row is not None
+    except Exception:
+        return False
+
+
 async def update_nickname(user_email: str, nickname: str):
     query = 'UPDATE "user" SET nickname = :nickname WHERE email = :user_email'
     await database.execute(query, values={"nickname": nickname, "user_email": user_email})
