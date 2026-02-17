@@ -643,7 +643,8 @@ def modify_food(data, user_email: str = None):
                 user_email = data.get("user_email", user_email)
                 percentage = data.get("percentage", 100)
                 added_sugar_tsp = float(data.get("added_sugar_tsp") or 0.0)
-                is_try_again = data.get("is_try_again", False)
+                # Flag from UI for "Try Manually" recalc
+                is_try_manually = data.get("is_try_manually", False)
                 image_id = data.get("image_id", "")
                 manual_food_name = data.get("manual_food_name", "")
                 manual_insight = data.get("manual_insight", "")
@@ -691,9 +692,9 @@ def modify_food(data, user_email: str = None):
                     modified = True
                     logger.info(f"Sugar added: +{sugar_calories} kcal, +{sugar_weight}g")
                 
-                # Handle "Try Again" flag (store for later processing)
-                if is_try_again and image_id:
-                    logger.info(f"Try Again requested for time={time_value}, image_id={image_id}")
+                # Handle "Try Manually" flag (store for later processing)
+                if is_try_manually and image_id:
+                    logger.info(f"Try Manually requested for time={time_value}, image_id={image_id}")
                     # TODO: Implement photo re-analysis logic
                     # For now, just log it - proper implementation needs Kafka message to vision AI
                     modified = True

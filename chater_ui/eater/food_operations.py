@@ -144,7 +144,8 @@ def modify_food_record(request, user_email):
         modify_food_request.ParseFromString(proto_data)
         time = modify_food_request.time
         percentage = modify_food_request.percentage
-        is_try_again = modify_food_request.is_try_again
+        # Field was renamed in proto to `is_try_manually`.
+        is_try_manually = modify_food_request.is_try_manually
         image_id = modify_food_request.image_id
         added_sugar_tsp = modify_food_request.added_sugar_tsp
         manual_food_name = modify_food_request.manual_food_name
@@ -152,11 +153,11 @@ def modify_food_record(request, user_email):
         manual_components = list(modify_food_request.manual_components)
         
         logger.debug(
-            "Extracted modify payload for user %s: time=%s percentage=%s is_try_again=%s added_sugar_tsp=%s",
+            "Extracted modify payload for user %s: time=%s percentage=%s is_try_manually=%s added_sugar_tsp=%s",
             user_email,
             time,
             percentage,
-            is_try_again,
+            is_try_manually,
             added_sugar_tsp,
         )
 
@@ -164,7 +165,7 @@ def modify_food_record(request, user_email):
             "time": time,
             "user_email": user_email,
             "percentage": percentage,
-            "is_try_again": is_try_again,
+            "is_try_manually": is_try_manually,
             "image_id": image_id,
             "added_sugar_tsp": added_sugar_tsp,
             "manual_food_name": manual_food_name,
@@ -172,12 +173,12 @@ def modify_food_record(request, user_email):
             "manual_components": manual_components,
         }
 
-        # If user is manually correcting the dish and wants a recalculation,
+        # If user is manually correcting the dish ("Try Manually") and wants a recalculation,
         # rerun photo analysis using the existing image_id and overwrite the existing record.
-        if is_try_again and image_id:
+        if is_try_manually and image_id:
             client = current_app.config.get("MINIO_CLIENT")
             if client is None:
-                return _json_error(500, "MinIO client not available for try-again")
+                return _json_error(500, "MinIO client not available for try-manually")
 
             bucket_name = os.getenv("MINIO_BUCKET_EATER", "eater")
             target_image_id = image_id if "/" in image_id else f"{user_email}/{image_id}"
