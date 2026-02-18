@@ -16,7 +16,7 @@ from logging_config import setup_logging
 from neo4j_connection import neo4j_connection
 from postgres import (autocomplete_query, database, get_food_record_by_time,
                       ensure_nickname_column, update_nickname, get_nickname,
-                      nickname_is_taken,
+                      nickname_is_taken, update_goal,
                       record_chess_game, get_chess_stats, get_all_chess_data,
                       get_chess_history)
 from proto import add_friend_pb2, get_friends_pb2, share_food_pb2
@@ -122,6 +122,42 @@ def _nickname_valid(raw: str) -> bool:
         return False
     normalized = _normalize_nickname(raw)
     return len(normalized) >= 1 and all(c.isascii() and (c.islower() or c.isdigit()) for c in normalized)
+
+
+@app.post("/autocomplete/update_goal")
+@token_required
+async def update_goal_endpoint(request: Request, user_email: str):
+    """
+    Update user goal settings (target_weight, goal_mode, goal_months, recommended_calories).
+    """
+    try:
+        body = await request.json()
+        target_weight = body.get("target_weight")
+        goal_mode = body.get("goal_mode")
+        goal_months = body.get("goal_months")
+        recommended_calories = body.get("recommended_calories")
+
+        if target_weight is None or goal_mode is None:
+            raise HTTPException(
+                status_code=400,
+                detail="target_weight and goal_mode are required",
+            )
+
+        await update_goal(
+            user_email=user_email,
+            target_weight=float(target_weight),
+            goal_mode=str(goal_mode),
+            goal_months=int(goal_months) if goal_months is not None else None,
+            recommended_calories=int(recommended_calories)
+            if recommended_calories is not None
+            else None,
+        )
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating goal for {user_email}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/autocomplete/update_nickname")

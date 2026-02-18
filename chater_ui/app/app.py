@@ -384,6 +384,13 @@ def set_language_route(user_email):
     return set_language(request=request, user_email=user_email)
 
 
+@app.route(dev_route("/goal_update"), methods=["POST"])
+@track_eater_operation("goal_update")
+@token_required
+def goal_update(user_email):
+    return update_user_goal(request=request, user_email=user_email)
+
+
 @app.route(dev_route("/nickname_update"), methods=["POST"])
 @track_eater_operation("nickname_update")
 @token_required

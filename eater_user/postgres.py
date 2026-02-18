@@ -142,6 +142,41 @@ async def autocomplete_query(query: str, limit: int, user_email: str):
         raise
 
 
+async def update_goal(
+    user_email: str,
+    target_weight: float,
+    goal_mode: str,
+    goal_months: int | None = None,
+    recommended_calories: int | None = None,
+):
+    """
+    Persist user goal settings (target weight, mode, duration, recommended calories).
+    """
+    try:
+        query = """
+        UPDATE "user"
+        SET
+            target_weight = :target_weight,
+            goal_mode = :goal_mode,
+            goal_months = :goal_months,
+            recommended_calories = :recommended_calories
+        WHERE email = :user_email
+        """
+        await database.execute(
+            query,
+            values={
+                "target_weight": target_weight,
+                "goal_mode": goal_mode,
+                "goal_months": goal_months,
+                "recommended_calories": recommended_calories,
+                "user_email": user_email,
+            },
+        )
+    except Exception as e:
+        logger.exception("update_goal failed: %s", e)
+        raise
+
+
 async def get_food_record_by_time(time: int, user_email: str):
     try:
         query = """

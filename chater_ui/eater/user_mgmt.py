@@ -51,6 +51,37 @@ def update_user_nickname(request, user_email):
         return jsonify({"error": "Internal Error"}), 500
 
 
+def update_user_goal(request, user_email):
+    """
+    Proxy goal update (target_weight, goal_mode, goal_months, recommended_calories)
+    to the eater_user/autocomplete service.
+    """
+    try:
+        data = request.get_json()
+        if not data or "target_weight" not in data or "goal_mode" not in data:
+            return jsonify({"error": "target_weight and goal_mode are required"}), 400
+
+        url = f"{AUTOCOMPLETE_SERVICE_URL}/autocomplete/update_goal"
+        headers = {
+            "Authorization": request.headers.get("Authorization"),
+            "Content-Type": "application/json",
+        }
+
+        resp = requests.post(url, json=data, headers=headers, timeout=5)
+
+        if resp.status_code == 200:
+            return jsonify(resp.json()), 200
+        else:
+            logger.error(f"Failed to update goal: {resp.status_code} {resp.text}")
+            try:
+                return jsonify(resp.json()), resp.status_code
+            except Exception:
+                return jsonify({"error": "Failed to update goal"}), resp.status_code
+    except Exception as e:
+        logger.exception(f"Error updating goal for {user_email}: {e}")
+        return jsonify({"error": "Internal Error"}), 500
+
+
 def add_friend_request(request, user_email):
     """
     Proxy add friend request to eater-users service.
