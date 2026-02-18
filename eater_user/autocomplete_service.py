@@ -17,6 +17,7 @@ from neo4j_connection import neo4j_connection
 from postgres import (autocomplete_query, database, get_food_record_by_time,
                       ensure_nickname_column, update_nickname, get_nickname,
                       nickname_is_taken, update_goal,
+                      log_activity_entry, get_activity_summary,
                       record_chess_game, get_chess_stats, get_all_chess_data,
                       get_chess_history)
 from proto import add_friend_pb2, get_friends_pb2, share_food_pb2
@@ -122,6 +123,73 @@ def _nickname_valid(raw: str) -> bool:
         return False
     normalized = _normalize_nickname(raw)
     return len(normalized) >= 1 and all(c.isascii() and (c.islower() or c.isdigit()) for c in normalized)
+
+
+@app.post("/activity/log")
+@token_required
+async def activity_log_endpoint(request: Request, user_email: str):
+    """
+    Log a single activity entry for the given user.
+    Expects JSON: { "activity_type": "gym", "value": 30, "calories": 200, "time": 1234567?, "date": "YYYY-MM-DD"? }
+    """
+    try:
+        body = await request.json()
+        activity_type = body.get("activity_type")
+        value = body.get("value")
+        calories = body.get("calories")
+        time_value = body.get("time")
+        date_str = body.get("date")
+
+        if activity_type is None or value is None or calories is None:
+            raise HTTPException(
+                status_code=400,
+                detail="activity_type, value and calories are required",
+            )
+
+        # Default time/date if not provided
+        if time_value is None:
+            import time as _time
+            time_value = int(_time.time() * 1000)
+        if date_str is None:
+            import datetime as _dt
+            date_str = _dt.datetime.utcnow().date().isoformat()
+
+        await log_activity_entry(
+            user_email=user_email,
+            time=int(time_value),
+            date=date_str,
+            activity_type=str(activity_type),
+            value=int(value),
+            calories=int(calories),
+        )
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error logging activity for {user_email}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/activity/summary")
+@token_required
+async def activity_summary_endpoint(request: Request, user_email: str):
+    """
+    Return total calories and activity types for a given date (UTC).
+    Query param: ?date=YYYY-MM-DD (defaults to today UTC).
+    """
+    try:
+        date_str = request.query_params.get("date")
+        if not date_str:
+            import datetime as _dt
+            date_str = _dt.datetime.utcnow().date().isoformat()
+
+        summary = await get_activity_summary(user_email=user_email, date=date_str)
+        return {"date": date_str, **summary}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting activity summary for {user_email}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/autocomplete/update_goal")

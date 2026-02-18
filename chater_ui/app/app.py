@@ -33,7 +33,8 @@ from eater.chess import (get_all_chess_data_request, get_chess_stats_request,
                          record_chess_game_request)
 from eater.feedback import submit_feedback_request
 from eater.user_mgmt import (add_friend_request, get_friends_request,
-                           share_food_request, update_user_nickname)
+                           share_food_request, update_user_nickname,
+                           update_user_goal, log_activity, get_activity_summary)
 
 from .metrics import (metrics_endpoint, record_http_metrics,
                       track_eater_operation, track_operation)
@@ -382,6 +383,20 @@ def eater_admin_proxy_route(resource_path):
 @token_required
 def set_language_route(user_email):
     return set_language(request=request, user_email=user_email)
+
+
+@app.route(dev_route("/activity_log"), methods=["POST"])
+@track_eater_operation("activity_log")
+@token_required
+def activity_log_route(user_email):
+    return log_activity(request=request, user_email=user_email)
+
+
+@app.route(dev_route("/activity_summary"), methods=["GET"])
+@track_eater_operation("activity_summary")
+@token_required
+def activity_summary_route(user_email):
+    return get_activity_summary(user_email=user_email, request=request)
 
 
 @app.route(dev_route("/goal_update"), methods=["POST"])

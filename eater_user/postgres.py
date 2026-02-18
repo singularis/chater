@@ -177,6 +177,73 @@ async def update_goal(
         raise
 
 
+async def log_activity_entry(
+    user_email: str,
+    time: int,
+    date: str,
+    activity_type: str,
+    value: int,
+    calories: int,
+):
+    """
+    Insert or update a single activity_log entry for a user.
+    """
+    try:
+        query = """
+        INSERT INTO public.activity_log (time, date, user_email, activity_type, value, calories)
+        VALUES (:time, :date, :user_email, :activity_type, :value, :calories)
+        ON CONFLICT (time) DO UPDATE
+        SET
+          date = EXCLUDED.date,
+          user_email = EXCLUDED.user_email,
+          activity_type = EXCLUDED.activity_type,
+          value = EXCLUDED.value,
+          calories = EXCLUDED.calories
+        """
+        await database.execute(
+            query,
+            values={
+                "time": time,
+                "date": date,
+                "user_email": user_email,
+                "activity_type": activity_type,
+                "value": value,
+                "calories": calories,
+            },
+        )
+    except Exception as e:
+        logger.exception("log_activity_entry failed: %s", e)
+        raise
+
+
+async def get_activity_summary(user_email: str, date: str):
+    """
+    Return total calories and list of activity types for given user+date.
+    """
+    try:
+        query = """
+        SELECT
+          COALESCE(SUM(calories), 0) AS total_calories,
+          ARRAY_AGG(DISTINCT activity_type) AS activity_types
+        FROM public.activity_log
+        WHERE user_email = :user_email
+          AND date = :date
+        """
+        row = await database.fetch_one(query, values={"user_email": user_email, "date": date})
+        if not row:
+            return {"total_calories": 0, "activity_types": []}
+        types = row["activity_types"] or []
+        # database driver may return list or tuple
+        activity_types = list(types)
+        return {
+            "total_calories": int(row["total_calories"] or 0),
+            "activity_types": activity_types,
+        }
+    except Exception as e:
+        logger.exception("get_activity_summary failed: %s", e)
+        raise
+
+
 async def get_food_record_by_time(time: int, user_email: str):
     try:
         query = """
