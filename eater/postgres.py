@@ -169,22 +169,39 @@ def write_to_dish_day(
                 else:
                     time_to_store = int(datetime.now().timestamp())
 
-                # Insert the new dish entry
-                dish_day = DishesDay(
-                    time=time_to_store,
-                    date=storage_date,
-                    dish_name=dish_name,
-                    estimated_avg_calories=estimated_avg_calories,
-                    ingredients=ingredients,
-                    total_avg_weight=total_avg_weight,
-                    health_rating=health_rating,
-                    food_health_level=food_health_level_str,
-                    contains=contains,
-                    user_email=user_email,
-                    image_id=image_id,
+                # Upsert: overwrite existing record for same time/user (used by manual re-analysis)
+                dish_day = (
+                    session.query(DishesDay)
+                    .filter(DishesDay.time == time_to_store)
+                    .filter(DishesDay.user_email == user_email)
+                    .first()
                 )
 
-                session.add(dish_day)
+                if dish_day:
+                    dish_day.date = storage_date
+                    dish_day.dish_name = dish_name
+                    dish_day.estimated_avg_calories = estimated_avg_calories
+                    dish_day.ingredients = ingredients
+                    dish_day.total_avg_weight = total_avg_weight
+                    dish_day.health_rating = health_rating
+                    dish_day.food_health_level = food_health_level_str
+                    dish_day.contains = contains
+                    dish_day.image_id = image_id
+                else:
+                    dish_day = DishesDay(
+                        time=time_to_store,
+                        date=storage_date,
+                        dish_name=dish_name,
+                        estimated_avg_calories=estimated_avg_calories,
+                        ingredients=ingredients,
+                        total_avg_weight=total_avg_weight,
+                        health_rating=health_rating,
+                        food_health_level=food_health_level_str,
+                        contains=contains,
+                        user_email=user_email,
+                        image_id=image_id,
+                    )
+                    session.add(dish_day)
 
                 # If the dish is alcohol, record alcohol consumption
                 try:
@@ -625,8 +642,9 @@ def modify_food(data, user_email: str = None):
                 time_value = data.get("time")
                 user_email = data.get("user_email", user_email)
                 percentage = data.get("percentage", 100)
-                added_sugar_tsp = data.get("added_sugar_tsp", 0.0)
-                is_try_again = data.get("is_try_again", False)
+                added_sugar_tsp = float(data.get("added_sugar_tsp") or 0.0)
+                # Flag from UI for "Try Manually" recalc
+                is_try_manually = data.get("is_try_manually", False)
                 image_id = data.get("image_id", "")
                 manual_food_name = data.get("manual_food_name", "")
                 manual_insight = data.get("manual_insight", "")
@@ -674,9 +692,9 @@ def modify_food(data, user_email: str = None):
                     modified = True
                     logger.info(f"Sugar added: +{sugar_calories} kcal, +{sugar_weight}g")
                 
-                # Handle "Try Again" flag (store for later processing)
-                if is_try_again and image_id:
-                    logger.info(f"Try Again requested for time={time_value}, image_id={image_id}")
+                # Handle "Try Manually" flag (store for later processing)
+                if is_try_manually and image_id:
+                    logger.info(f"Try Manually requested for time={time_value}, image_id={image_id}")
                     # TODO: Implement photo re-analysis logic
                     # For now, just log it - proper implementation needs Kafka message to vision AI
                     modified = True
@@ -691,6 +709,36 @@ def modify_food(data, user_email: str = None):
                     food_record.ingredients = manual_components
                     modified = True
                     logger.info(f"Manual ingredients updated: {manual_components}")
+
+                # Added sugar: persist tsp and update calories/grams/contains/health rating.
+                # (1 tsp sugar ≈ 5g, ≈ 20 kcal)
+                if added_sugar_tsp and added_sugar_tsp > 0:
+                    existing = float(getattr(food_record, "added_sugar_tsp", 0.0) or 0.0)
+                    food_record.added_sugar_tsp = existing + added_sugar_tsp
+
+                    # Update dish totals (do not scale existing dish; add on top)
+                    food_record.estimated_avg_calories = int(
+                        (food_record.estimated_avg_calories or 0) + (20 * added_sugar_tsp)
+                    )
+                    food_record.total_avg_weight = int(
+                        (food_record.total_avg_weight or 0) + (5 * added_sugar_tsp)
+                    )
+
+                    # Update nutrition map if present
+                    if food_record.contains and isinstance(food_record.contains, dict):
+                        sugar_g = 5 * added_sugar_tsp
+                        food_record.contains["sugar"] = float(food_record.contains.get("sugar", 0) or 0) + sugar_g
+                        food_record.contains["carbohydrates"] = float(food_record.contains.get("carbohydrates", 0) or 0) + sugar_g
+
+                    # Penalize health rating for added sugar (10 points per tsp)
+                    try:
+                        base = int(getattr(food_record, "health_rating", 0) or 0)
+                        food_record.health_rating = max(0, min(100, base - int(10 * added_sugar_tsp)))
+                    except Exception:
+                        pass
+
+                    modified = True
+                    logger.info(f"Sugar added: +{added_sugar_tsp} tsp")
                 
                 # Handle percentage modification (original functionality)
                 if percentage != 100:
@@ -962,34 +1010,100 @@ def get_chess_stats_sync(user_email: str, opponent_email: Optional[str] = None):
 
 
 def get_all_chess_data_sync(user_email: str):
-    """Return total_wins and opponents dict {email: 'wins:losses'}. None on error."""
+    """Return total_wins, total_losses, total_draws, and detailed opponents data.
+    Each opponent entry includes score and game history with date/time."""
     try:
         with get_db_session() as session:
             total_row = session.execute(
                 text("""
-                    SELECT COUNT(*) FILTER (WHERE result = 'win') AS total_wins
+                    SELECT
+                        COUNT(*) FILTER (WHERE result = 'win') AS total_wins,
+                        COUNT(*) FILTER (WHERE result = 'loss') AS total_losses,
+                        COUNT(*) FILTER (WHERE result = 'draw') AS total_draws
                     FROM chess_games
                     WHERE player_email = :user_email
                 """),
                 {"user_email": user_email},
             ).fetchone()
             total_wins = int(total_row[0] or 0) if total_row else 0
+            total_losses = int(total_row[1] or 0) if total_row else 0
+            total_draws = int(total_row[2] or 0) if total_row else 0
 
             opp_rows = session.execute(
                 text("""
                     SELECT opponent_email,
-                           COUNT(*) FILTER (WHERE result = 'win') AS wins,
-                           COUNT(*) FILTER (WHERE result = 'loss') AS losses
+                           SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) AS wins,
+                           SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) AS losses,
+                           SUM(CASE WHEN result = 'draw' THEN 1 ELSE 0 END) AS draws,
+                           MAX(timestamp) AS last_game_timestamp
                     FROM chess_games
                     WHERE player_email = :user_email
                     GROUP BY opponent_email
+                    ORDER BY MAX(timestamp) DESC
                 """),
                 {"user_email": user_email},
             ).fetchall()
+
+            # Fetch game history
+            game_rows = session.execute(
+                text("""
+                    SELECT opponent_email, result, timestamp
+                    FROM chess_games
+                    WHERE player_email = :user_email
+                    ORDER BY timestamp DESC
+                """),
+                {"user_email": user_email},
+            ).fetchall()
+
+            # Group games by opponent
+            games_by_opponent = {}
+            for g in game_rows:
+                opp = g[0]
+                ts = g[2]
+                try:
+                    dt = datetime.fromtimestamp(int(ts) / 1000.0, tz=timezone.utc)
+                    game_entry = {
+                        "result": g[1],
+                        "timestamp": ts,
+                        "date": dt.strftime("%Y-%m-%d"),
+                        "time": dt.strftime("%H:%M"),
+                    }
+                except Exception:
+                    game_entry = {"result": g[1], "timestamp": ts, "date": "", "time": ""}
+                games_by_opponent.setdefault(opp, []).append(game_entry)
+
             opponents = {}
             for r in opp_rows:
-                opponents[r[0]] = f"{r[1] or 0}:{r[2] or 0}"
-            return {"total_wins": total_wins, "opponents": opponents}
+                opp_email = r[0]
+                my_wins = int(r[1] or 0)
+                opp_wins = int(r[2] or 0)
+                draws = int(r[3] or 0)
+
+                last_ts = r[4]
+                last_date = ""
+                if last_ts:
+                    try:
+                        dt = datetime.fromtimestamp(int(last_ts) / 1000.0, tz=timezone.utc)
+                        last_date = dt.strftime("%Y-%m-%d")
+                    except Exception:
+                        pass
+
+                opponents[opp_email] = {
+                    "score": f"{my_wins}:{opp_wins}",
+                    "wins": my_wins,
+                    "losses": opp_wins,
+                    "draws": draws,
+                    "nickname": opp_email,
+                    "last_game_date": last_date,
+                    "games": games_by_opponent.get(opp_email, []),
+                }
+
+            return {
+                "total_wins": total_wins,
+                "total_losses": total_losses,
+                "total_draws": total_draws,
+                "opponents": opponents,
+            }
     except Exception as e:
         logger.exception("get_all_chess_data_sync failed: %s", e)
-        return None
+        return {"total_wins": 0, "total_losses": 0, "total_draws": 0, "opponents": {}}

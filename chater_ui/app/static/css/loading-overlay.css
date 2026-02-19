@@ -1,0 +1,52 @@
+/* Loading overlay – dark theme, full-screen, for long-running requests (e.g. modify_food_manual) */
+
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(18, 18, 18, 0.85);
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.loading-overlay.is-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.loading-overlay__box {
+    background: #2c2c2c;
+    border: 1px solid #424242;
+    border-radius: 12px;
+    padding: 24px 32px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    min-width: 200px;
+}
+
+.loading-overlay__spinner {
+    width: 40px;
+    height: 40px;
+    margin: 0 auto 16px;
+    border: 3px solid #424242;
+    border-top-color: #64b5f6;
+    border-radius: 50%;
+    animation: loading-overlay-spin 0.9s linear infinite;
+}
+
+.loading-overlay__text {
+    color: #e0e0e0;
+    font-size: 15px;
+    margin: 0;
+}
+
+@keyframes loading-overlay-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

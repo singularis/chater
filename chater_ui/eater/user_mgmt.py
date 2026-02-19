@@ -51,6 +51,96 @@ def update_user_nickname(request, user_email):
         return jsonify({"error": "Internal Error"}), 500
 
 
+def update_user_goal(request, user_email):
+    """
+    Proxy goal update (target_weight, goal_mode, goal_months, recommended_calories)
+    to the eater_user/autocomplete service.
+    """
+    try:
+        data = request.get_json()
+        if not data or "target_weight" not in data or "goal_mode" not in data:
+            return jsonify({"error": "target_weight and goal_mode are required"}), 400
+
+        url = f"{AUTOCOMPLETE_SERVICE_URL}/autocomplete/update_goal"
+        headers = {
+            "Authorization": request.headers.get("Authorization"),
+            "Content-Type": "application/json",
+        }
+
+        resp = requests.post(url, json=data, headers=headers, timeout=5)
+
+        if resp.status_code == 200:
+            return jsonify(resp.json()), 200
+        else:
+            logger.error(f"Failed to update goal: {resp.status_code} {resp.text}")
+            try:
+                return jsonify(resp.json()), resp.status_code
+            except Exception:
+                return jsonify({"error": "Failed to update goal"}), resp.status_code
+    except Exception as e:
+        logger.exception(f"Error updating goal for {user_email}: {e}")
+        return jsonify({"error": "Internal Error"}), 500
+
+
+def log_activity(request, user_email):
+    """
+    Proxy activity log request to eater_user service.
+    Expects JSON with activity_type, value, calories, optional time/date.
+    """
+    try:
+        data = request.get_json()
+        required = ["activity_type", "value", "calories"]
+        if not data or not all(k in data for k in required):
+            return jsonify({"error": "activity_type, value and calories are required"}), 400
+
+        url = f"{AUTOCOMPLETE_SERVICE_URL}/activity/log"
+        headers = {
+            "Authorization": request.headers.get("Authorization"),
+            "Content-Type": "application/json",
+        }
+
+        resp = requests.post(url, json=data, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            return jsonify(resp.json()), 200
+        else:
+            logger.error(f"Failed to log activity: {resp.status_code} {resp.text}")
+            try:
+                return jsonify(resp.json()), resp.status_code
+            except Exception:
+                return jsonify({"error": "Failed to log activity"}), resp.status_code
+    except Exception as e:
+        logger.exception(f"Error logging activity for {user_email}: {e}")
+        return jsonify({"error": "Internal Error"}), 500
+
+
+def get_activity_summary(user_email, request):
+    """
+    Proxy activity summary request (per date) to eater_user service.
+    """
+    try:
+        date_param = request.args.get("date")
+        url = f"{AUTOCOMPLETE_SERVICE_URL}/activity/summary"
+        params = {}
+        if date_param:
+            params["date"] = date_param
+
+        headers = {
+            "Authorization": request.headers.get("Authorization"),
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=5)
+        if resp.status_code == 200:
+            return jsonify(resp.json()), 200
+        else:
+            logger.error(f"Failed to get activity summary: {resp.status_code} {resp.text}")
+            try:
+                return jsonify(resp.json()), resp.status_code
+            except Exception:
+                return jsonify({"error": "Failed to get activity summary"}), resp.status_code
+    except Exception as e:
+        logger.exception(f"Error getting activity summary for {user_email}: {e}")
+        return jsonify({"error": "Internal Error"}), 500
+
+
 def add_friend_request(request, user_email):
     """
     Proxy add friend request to eater-users service.

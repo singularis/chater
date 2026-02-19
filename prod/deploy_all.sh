@@ -12,17 +12,19 @@ echo "Starting deployment process..."
 # Initialize an array to store deployed folders
 deployed_folders=()
 
-# Find all subdirectories with a prod/deploy.sh and run it
-find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 -type d | while read -r dir; do
+# Find all subdirectories with a prod/deploy.sh and run it.
+# Use -print0 to safely handle spaces in folder names.
+while IFS= read -r -d '' dir; do
+    folder_name="$(basename "$dir")"
     deploy_script="$dir/prod/deploy.sh"
     if [ -f "$deploy_script" ]; then
-        folder_name="$(basename "$dir")"
         echo "Deploying in $folder_name..."
-        cd "$dir" && ./prod/deploy.sh
+        # Enforce "exit on error" inside deploy scripts too (many don't set -e).
+        cd "$dir" && bash -e ./prod/deploy.sh
         cd "$PROJECT_DIR"
         deployed_folders+=("$folder_name")
     fi
-done
+done < <(find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 -type d -print0)
 
 echo -e "\nDeployment Summary:"
 echo "------------------"

@@ -27,12 +27,14 @@ from eater.eater import (alcohol_latest, alcohol_range, delete_food_record,
                          eater_auth_request, eater_custom_date, eater_photo,
                          eater_today, food_health_level, get_photo_file,
                          get_recommendations, manual_weight_record,
-                         modify_food_record_data, set_language)
+                         modify_food_manual_data, modify_food_record_data,
+                         set_language)
 from eater.chess import (get_all_chess_data_request, get_chess_stats_request,
                          record_chess_game_request)
 from eater.feedback import submit_feedback_request
 from eater.user_mgmt import (add_friend_request, get_friends_request,
-                           share_food_request, update_user_nickname)
+                           share_food_request, update_user_nickname,
+                           update_user_goal, log_activity, get_activity_summary)
 
 from .metrics import (metrics_endpoint, record_http_metrics,
                       track_eater_operation, track_operation)
@@ -77,7 +79,7 @@ app.config.update(
 Session(app)
 
 picFolder = "/app/app/static/pics"
-SESSION_LIFETIME = int(os.getenv("SESSION_LIFETIME"))
+SESSION_LIFETIME = int(os.getenv("SESSION_LIFETIME", "3600"))
 ALLOWED_EMAILS = os.getenv("ALLOWED_EMAILS", "").split(",")
 
 google_bp = create_google_blueprint()
@@ -314,6 +316,13 @@ def modify_food(user_email):
     return modify_food_record_data(request=request, user_email=user_email)
 
 
+@app.route(dev_route("/modify_food_manual"), methods=["POST"])
+@track_eater_operation("modify_food_manual")
+@token_required
+def modify_food_manual(user_email):
+    return modify_food_manual_data(request=request, user_email=user_email)
+
+
 @app.route(dev_route("/get_recommendation"), methods=["POST"])
 @track_eater_operation("get_recommendation")
 @token_required
@@ -374,6 +383,27 @@ def eater_admin_proxy_route(resource_path):
 @token_required
 def set_language_route(user_email):
     return set_language(request=request, user_email=user_email)
+
+
+@app.route(dev_route("/activity_log"), methods=["POST"])
+@track_eater_operation("activity_log")
+@token_required
+def activity_log_route(user_email):
+    return log_activity(request=request, user_email=user_email)
+
+
+@app.route(dev_route("/activity_summary"), methods=["GET"])
+@track_eater_operation("activity_summary")
+@token_required
+def activity_summary_route(user_email):
+    return get_activity_summary(user_email=user_email, request=request)
+
+
+@app.route(dev_route("/goal_update"), methods=["POST"])
+@track_eater_operation("goal_update")
+@token_required
+def goal_update(user_email):
+    return update_user_goal(request=request, user_email=user_email)
 
 
 @app.route(dev_route("/nickname_update"), methods=["POST"])

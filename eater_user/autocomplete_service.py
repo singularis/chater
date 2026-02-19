@@ -15,7 +15,11 @@ from dev_utils import get_topic_name
 from logging_config import setup_logging
 from neo4j_connection import neo4j_connection
 from postgres import (autocomplete_query, database, get_food_record_by_time,
-                      ensure_nickname_column, update_nickname, get_nickname)
+                      ensure_nickname_column, update_nickname, get_nickname,
+                      nickname_is_taken, update_goal,
+                      log_activity_entry, get_activity_summary,
+                      record_chess_game, get_chess_stats, get_all_chess_data,
+                      get_chess_history)
 from proto import add_friend_pb2, get_friends_pb2, share_food_pb2
 from starlette.websockets import WebSocketState
 
@@ -109,6 +113,121 @@ async def add_friend_endpoint(request: Request, user_email: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+def _normalize_nickname(raw: str) -> str:
+    return raw.strip().lower()
+
+
+def _nickname_valid(raw: str) -> bool:
+    """Only Latin lowercase letters and digits allowed."""
+    if not raw or len(raw) > 50:
+        return False
+    normalized = _normalize_nickname(raw)
+    return len(normalized) >= 1 and all(c.isascii() and (c.islower() or c.isdigit()) for c in normalized)
+
+
+@app.post("/activity/log")
+@token_required
+async def activity_log_endpoint(request: Request, user_email: str):
+    """
+    Log a single activity entry for the given user.
+    Expects JSON: { "activity_type": "gym", "value": 30, "calories": 200, "time": 1234567?, "date": "YYYY-MM-DD"? }
+    """
+    try:
+        body = await request.json()
+        activity_type = body.get("activity_type")
+        value = body.get("value")
+        calories = body.get("calories")
+        time_value = body.get("time")
+        date_str = body.get("date")
+
+        if activity_type is None or value is None or calories is None:
+            raise HTTPException(
+                status_code=400,
+                detail="activity_type, value and calories are required",
+            )
+
+        # Default time/date if not provided
+        if time_value is None:
+            import time as _time
+            time_value = int(_time.time() * 1000)
+        if date_str is None:
+            import datetime as _dt
+            date_str = _dt.datetime.utcnow().date().isoformat()
+
+        await log_activity_entry(
+            user_email=user_email,
+            time=int(time_value),
+            date=date_str,
+            activity_type=str(activity_type),
+            value=int(value),
+            calories=int(calories),
+        )
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error logging activity for {user_email}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/activity/summary")
+@token_required
+async def activity_summary_endpoint(request: Request, user_email: str):
+    """
+    Return total calories and activity types for a given date (UTC).
+    Query param: ?date=YYYY-MM-DD (defaults to today UTC).
+    """
+    try:
+        date_str = request.query_params.get("date")
+        if not date_str:
+            import datetime as _dt
+            date_str = _dt.datetime.utcnow().date().isoformat()
+
+        summary = await get_activity_summary(user_email=user_email, date=date_str)
+        return {"date": date_str, **summary}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting activity summary for {user_email}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/autocomplete/update_goal")
+@token_required
+async def update_goal_endpoint(request: Request, user_email: str):
+    """
+    Update user goal settings (target_weight, goal_mode, goal_months, recommended_calories).
+    """
+    try:
+        body = await request.json()
+        target_weight = body.get("target_weight")
+        goal_mode = body.get("goal_mode")
+        goal_months = body.get("goal_months")
+        recommended_calories = body.get("recommended_calories")
+
+        if target_weight is None or goal_mode is None:
+            raise HTTPException(
+                status_code=400,
+                detail="target_weight and goal_mode are required",
+            )
+
+        await update_goal(
+            user_email=user_email,
+            target_weight=float(target_weight),
+            goal_mode=str(goal_mode),
+            goal_months=int(goal_months) if goal_months is not None else None,
+            recommended_calories=int(recommended_calories)
+            if recommended_calories is not None
+            else None,
+        )
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating goal for {user_email}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.post("/autocomplete/update_nickname")
 @token_required
 async def update_nickname_endpoint(request: Request, user_email: str):
@@ -117,12 +236,22 @@ async def update_nickname_endpoint(request: Request, user_email: str):
         nickname = body.get("nickname")
         if not nickname:
             raise HTTPException(status_code=400, detail="Nickname required")
-            
+
         nickname = nickname.strip()
         if len(nickname) < 1 or len(nickname) > 50:
-             raise HTTPException(status_code=400, detail="Nickname length invalid")
+            raise HTTPException(status_code=400, detail="Nickname length invalid")
 
-        await update_nickname(user_email, nickname)
+        if not _nickname_valid(nickname):
+            raise HTTPException(
+                status_code=400,
+                detail="Nickname must contain only Latin lowercase letters and digits (a-z, 0-9)"
+            )
+
+        normalized = _normalize_nickname(nickname)
+        if await nickname_is_taken(normalized, exclude_email=user_email):
+            raise HTTPException(status_code=409, detail="Nickname already taken")
+
+        await update_nickname(user_email, normalized)
         return {"success": True}
 
     except HTTPException:
@@ -419,6 +548,124 @@ async def websocket_autocomplete(websocket: WebSocket):
     except Exception:
         if user_email:
             manager.disconnect(websocket, user_email)
+
+
+# MARK: - Chess Game Endpoints
+
+
+@app.post("/autocomplete/record_chess_game")
+@token_required
+async def record_chess_game_endpoint(request: Request, user_email: str):
+    """Record a chess game result between user and opponent.
+    Request body: {player_email, opponent_email, result, timestamp}
+    """
+    try:
+        body = await request.json()
+
+        player_email = (body.get("player_email") or "").strip()
+        opponent_email = (body.get("opponent_email") or "").strip()
+        result = (body.get("result") or "").strip()
+        timestamp = int(body.get("timestamp") or 0)
+
+        if not player_email or not opponent_email:
+            raise HTTPException(status_code=400, detail="player_email and opponent_email required")
+        if player_email != user_email:
+            raise HTTPException(status_code=403, detail="Cannot record game for another user")
+        if result not in ("win", "loss", "draw"):
+            raise HTTPException(status_code=400, detail="result must be win, loss, or draw")
+
+        ok = await record_chess_game(player_email, opponent_email, result, timestamp)
+        if not ok:
+            raise HTTPException(status_code=500, detail="Failed to record game")
+
+        # Fetch updated stats for both players against each other
+        player_stats = await get_chess_stats(player_email, opponent_email)
+        opponent_stats = await get_chess_stats(opponent_email, player_email)
+
+        return {
+            "success": True,
+            "player_wins": (player_stats or {}).get("wins", 0),
+            "player_losses": (player_stats or {}).get("losses", 0),
+            "opponent_wins": (opponent_stats or {}).get("wins", 0),
+            "opponent_losses": (opponent_stats or {}).get("losses", 0),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("record_chess_game_endpoint failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/autocomplete/get_chess_stats")
+@token_required
+async def get_chess_stats_endpoint(request: Request, user_email: str):
+    """Get chess stats for user vs a specific opponent (or last opponent).
+    Optional body: {opponent_email: "..."}
+    """
+    try:
+        body = await request.json()
+        opponent_email = (body.get("opponent_email") or "").strip() or None
+
+        stats = await get_chess_stats(user_email, opponent_email)
+        if stats is None:
+            return {
+                "score": "0:0",
+                "opponent_name": "",
+                "last_game_date": "",
+            }
+
+        return {
+            "score": stats.get("score", "0:0"),
+            "opponent_name": stats.get("opponent_name", ""),
+            "last_game_date": stats.get("last_game_date", ""),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("get_chess_stats_endpoint failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/autocomplete/get_all_chess_data")
+@token_required
+async def get_all_chess_data_endpoint(request: Request, user_email: str):
+    """Get total stats + per-opponent scores and game history for the authenticated user.
+    Returns total_wins, total_losses, total_draws, and for each opponent:
+    score, wins, losses, draws, nickname, last_game_date, and games[] array.
+    """
+    try:
+        data = await get_all_chess_data(user_email)
+        return {
+            "total_wins": data.get("total_wins", 0),
+            "total_losses": data.get("total_losses", 0),
+            "total_draws": data.get("total_draws", 0),
+            "opponents": data.get("opponents", {}),
+        }
+    except Exception as e:
+        logger.exception("get_all_chess_data_endpoint failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/autocomplete/get_chess_history")
+@token_required
+async def get_chess_history_endpoint(request: Request, user_email: str):
+    """Get paginated game history for the authenticated user.
+    Query params: limit (default 50), offset (default 0).
+    Returns {games: [{opponent_email, opponent_nickname, result, date, time, timestamp}], total, limit, offset}.
+    """
+    try:
+        limit = int(request.query_params.get("limit", 50))
+        offset = int(request.query_params.get("offset", 0))
+        limit = min(max(limit, 1), 200)  # clamp to 1-200
+        offset = max(offset, 0)
+
+        data = await get_chess_history(user_email, limit=limit, offset=offset)
+        return data
+    except Exception as e:
+        logger.exception("get_chess_history_endpoint failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 if __name__ == "__main__":

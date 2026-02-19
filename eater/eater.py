@@ -260,7 +260,7 @@ def process_messages():
                             },
                         },
                     )
-                elif message.topic() == "record_chess_game":
+                elif message.topic() == get_topic_name("record_chess_game"):
                     req = value_dict.get("value", {})
                     player_email = (req.get("player_email") or "").strip()
                     opponent_email = (req.get("opponent_email") or "").strip()
@@ -340,7 +340,7 @@ def process_messages():
                                     },
                                 },
                             )
-                elif message.topic() == "get_chess_stats":
+                elif message.topic() == get_topic_name("get_chess_stats"):
                     req = value_dict.get("value", {})
                     opponent_email = (req.get("opponent_email") or "").strip() or None
                     stats = get_chess_stats_sync(user_email, opponent_email)
@@ -356,7 +356,7 @@ def process_messages():
                             },
                         },
                     )
-                elif message.topic() == "get_all_chess_data":
+                elif message.topic() == get_topic_name("get_all_chess_data"):
                     data = get_all_chess_data_sync(user_email)
                     produce_message(
                         topic="get_all_chess_data_response",
@@ -365,6 +365,8 @@ def process_messages():
                             "value": {
                                 "user_email": user_email,
                                 "total_wins": (data or {}).get("total_wins", 0),
+                                "total_losses": (data or {}).get("total_losses", 0),
+                                "total_draws": (data or {}).get("total_draws", 0),
                                 "opponents": (data or {}).get("opponents", {}),
                             },
                         },

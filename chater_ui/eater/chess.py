@@ -138,6 +138,8 @@ def get_all_chess_data_request(user_email):
             return jsonify({"error": response.get("error")}), 500
         return jsonify({
             "total_wins": response.get("total_wins", 0),
+            "total_losses": response.get("total_losses", 0),
+            "total_draws": response.get("total_draws", 0),
             "opponents": response.get("opponents", {}),
         }), 200
     except KafkaDispatchError as e:

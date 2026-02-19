@@ -207,7 +207,8 @@ def _dispatch_photo_message(
     topic="eater-send-photo",
     image_path=None,
     timestamp=None,
-    date=None
+    date=None,
+    prompt_suffix=None,
 ):
     photo_uuid = message_id or str(uuid.uuid4())
     clear_prompt = get_prompt(type_of_processing)
@@ -220,6 +221,12 @@ def _dispatch_photo_message(
 
     # Use image_path (MinIO object name) as image_id if valid, else use uuid
     image_id_to_send = image_path if image_path else photo_uuid
+
+    if prompt_suffix:
+        try:
+            prompt = f"{prompt}\n\n{prompt_suffix}"
+        except Exception:
+            pass
 
     payload = {
         "prompt": prompt,

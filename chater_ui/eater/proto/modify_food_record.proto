@@ -6,7 +6,7 @@ message ModifyFoodRecordRequest {
   int64 time = 1;
   string user_email = 2;
   int32 percentage = 3;
-  bool is_try_again = 4;
+  bool is_try_manually = 4;
   string manual_food_name = 5;
   string manual_insight = 6;
   repeated string manual_components = 7;

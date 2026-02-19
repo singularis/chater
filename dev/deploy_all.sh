@@ -12,17 +12,18 @@ echo "Starting DEV deployment process..."
 # Initialize an array to store deployed folders
 deployed_folders=()
 
-# Find all subdirectories with a dev/deploy.sh and run it
-find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 -type d | while read -r dir; do
+# Find all subdirectories with a dev/deploy.sh and run it.
+# Use process substitution to avoid subshell (so deployed_folders persists).
+while IFS= read -r -d '' dir; do
     deploy_script="$dir/dev/deploy.sh"
     if [ -f "$deploy_script" ]; then
         folder_name="$(basename "$dir")"
         echo "Deploying DEV in $folder_name..."
-        cd "$dir" && ./dev/deploy.sh
+        cd "$dir" && bash -e ./dev/deploy.sh
         cd "$PROJECT_DIR"
         deployed_folders+=("$folder_name")
     fi
-done
+done < <(find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 -type d -print0)
 
 echo -e "\nDEV Deployment Summary:"
 echo "------------------------"
@@ -33,4 +34,4 @@ else
     for folder in "${deployed_folders[@]}"; do
         echo "- $folder"
     done
-fi 
+fi

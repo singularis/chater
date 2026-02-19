@@ -10,7 +10,7 @@ from local_models_helper import LocalModelService
 
 from .food_operations import (delete_food, get_alcohol_latest,
                               get_alcohol_range, manual_weight,
-                              modify_food_record)
+                              modify_food_record, modify_food_manual)
 from .getter_eater import (eater_auth_token, eater_get_custom_date,
                            eater_get_food_health_level, eater_get_today,
                            get_recommendation)
@@ -166,6 +166,17 @@ def modify_food_record_data(request, user_email):
         return result
     except Exception:
         logger.exception("Failed to update food record for user %s", user_email)
+        return "Failed"
+
+
+def modify_food_manual_data(request, user_email):
+    logger.info("Updating food record manually", extra={"user_email": user_email})
+    try:
+        return modify_food_manual(request=request, user_email=user_email)
+    except Exception:
+        logger.exception(
+            "Failed to update food record manually for user %s", user_email
+        )
         return "Failed"
 
 
