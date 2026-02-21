@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Testing</title>
+    <title>Notes</title>
     <!-- Materialize CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
     <!-- Custom CSS -->
@@ -15,54 +15,36 @@
 
 <body>
     <div class="container">
+        <h4 class="center-align white-text">Exchange Notes</h4>
         <div class="row">
             <!-- Form for user input -->
             <form class="col s12 request-window" method="POST">
                 <div class="row">
                     <div class="input-field col s12">
-                        <textarea id="question" name="question" class="materialize-textarea"
-                            autocomplete="off"></textarea>
-                        <label for="question">Placeholder for request</label>
+                        <textarea id="question" name="note" class="materialize-textarea" autocomplete="off"
+                            required></textarea>
+                        <label for="question">Type your note here...</label>
                     </div>
                     <div class="input-field col s12 button-switch-container">
                         <!-- POST Button on the left -->
-                        <button class="btn waves-effect waves-light blue" type="submit" name="action">POST</button>
-                        <!-- Switch Bar on the right -->
-                        <div class="switch">
-                            <label>
-                                Ctx Off
-                                <input type="checkbox" id="toggle-switch">
-                                <span class="lever"></span>
-                                On
-                            </label>
-                        </div>
-                        <!-- Dev Mode Switch -->
-                        <div class="switch" style="margin-left: 20px;">
-                            <label>
-                                Prod
-                                <input type="checkbox" id="dev-mode-switch">
-                                <span class="lever"></span>
-                                Dev
-                            </label>
-                        </div>
+                        <button class="btn waves-effect waves-light blue" type="submit" name="action">POST NOTE</button>
                     </div>
                 </div>
             </form>
         </div>
 
         <!-- Display responses if available -->
-        {% if responses %}
+        {% if notes %}
         <div class="row">
             <div class="col s12">
-                {% for entry in responses %}
+                {% for note in notes %}
                 <div class="card-panel dark-blue lighten-4">
                     <div class="collapsible-header" onclick="toggleContent(this)">
-                        <span>Q: {{ entry.question }}</span>
+                        <span>Posted at: {{ note.timestamp }}</span>
                     </div>
-                    <div class="collapsible-content">
+                    <div class="collapsible-content" style="display: block;">
                         <div class="scrollable">
-                            <pre class="script-code"><b>A:</b> {{ entry.response | safe }}</pre>
-                            <pre class="script-code"><b>Full:</b> {{ entry.full | safe }}</pre>
+                            <pre class="script-code">{{ note.content | safe }}</pre>
                         </div>
                     </div>
                 </div>
@@ -99,16 +81,22 @@
 
     <!-- JavaScript dependencies -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-    <!-- Custom JavaScript file -->
-    <script src="{{ url_for('static', filename='js/chater.js') }}"></script>
+    <script>
+        function toggleContent(element) {
+            var content = element.nextElementSibling;
+            if (content.style.display === "none") {
+                content.style.display = "block";
+            } else {
+                content.style.display = "none";
+            }
+        }
+    </script>
     <footer class="page-footer">
         <div class="container">
             <div class="row">
                 <div class="col s12 center-align">
-                    <!-- Clear Responses Button -->
-                    <a href="{{ url_for('chater_clear_responses') }}"
+                    <a href="{{ url_for('gempt_clear') }}"
                         class="btn waves-effect waves-light green btn-clear">Clear</a>
-                    <!-- Logout Button -->
                     <a href="{{ url_for('chater_logout') }}" class="btn waves-effect waves-light green">Logout</a>
                 </div>
             </div>

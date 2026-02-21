@@ -15,6 +15,7 @@ from flask_cors import CORS
 from flask_session import Session
 from google_ops import create_google_blueprint, g_login
 from gphoto import gphoto, gphoto_proxy
+from gempt import gempt as gempt_ui
 from kafka_consumer_service import (start_kafka_consumer_service,
                                     stop_kafka_consumer_service)
 from logging_config import setup_logging
@@ -181,7 +182,14 @@ def chamini():
 @app.route(dev_route("/gempt"), methods=["GET", "POST"])
 @track_operation("gempt")
 def gempt():
-    return chater_ui(session, target="gempt")
+    return gempt_ui(session, redis_client)
+
+
+@app.route(dev_route("/gempt_clear"), methods=["GET"])
+@track_operation("gempt_clear")
+def gempt_clear():
+    from gempt import gempt_clear as gempt_clear_ui
+    return gempt_clear_ui(session, redis_client)
 
 
 @app.route(dev_route("/chater_clear_responses"), methods=["GET"])

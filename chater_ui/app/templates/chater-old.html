@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,86 +12,90 @@
     <!-- Favicon -->
     <link rel="icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon">
 </head>
+
 <body>
-<div class="container">
-    <div class="row">
-        <!-- Form for user input -->
-        <form class="col s12 request-window" method="POST">
-            <div class="row">
-                <div class="input-field col s12">
-                    <textarea id="question" name="question" class="materialize-textarea" autocomplete="off"></textarea>
-                    <label for="question">Placeholder for request</label>
-                </div>
-                <div class="input-field col s12 button-switch-container">
-                    <!-- POST Button on the left -->
-                    <button class="btn waves-effect waves-light blue" type="submit" name="action">POST</button>
-                    <!-- Switch Bar on the right -->
-                    <div class="switch">
-                        <label>
-                            Off
-                            <input type="checkbox" id="toggle-switch">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <!-- Display responses if available -->
-    {% if responses %}
-    <div class="row">
-        <div class="col s12">
-            {% for entry in responses %}
-            <div class="card-panel dark-blue lighten-4">
-                <div class="collapsible-header" onclick="toggleContent(this)">
-                    <span>Q: {{ entry.question }}</span>
-                </div>
-                <div class="collapsible-content">
-                    <div class="scrollable">
-                        <pre class="script-code"><b>A:</b> {{ entry.response | safe }}</pre>
-                        <pre class="script-code"><b>Full:</b> {{ entry.full | safe }}</pre>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-</div>
-
-<!-- Icons for navigation or other actions -->
-<div class="icon-column">
-    <a href="/gphoto">
-        <img src="{{ url_for('static', filename='images/google-photos.png') }}" alt="gphoto">
-    </a>
-    <a href="/chamini">
-        <img src="{{ url_for('static', filename='images/chamini.png') }}" alt="chamini">
-    </a>
-    <a href="/chater">
-        <img src="{{ url_for('static', filename='images/chater.png') }}" alt="chater">
-    </a>
-    <a href="/gempt">
-        <img src="{{ url_for('static', filename='images/gempt.webp') }}" alt="gempt">
-    </a>
-</div>
-
-<!-- JavaScript dependencies -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-<!-- Custom JavaScript file -->
-<script src="{{ url_for('static', filename='js/chater.js') }}"></script>
-<footer class="page-footer">
     <div class="container">
         <div class="row">
-            <div class="col s12 center-align">
-                <!-- Clear Responses Button -->
-                <a href="{{ url_for('chater_clear_responses') }}" class="btn waves-effect waves-light green btn-clear">Clear</a>
-                <!-- Logout Button -->
-                <a href="{{ url_for('chater_logout') }}" class="btn waves-effect waves-light green">Logout</a>
+            <!-- Form for user input -->
+            <form class="col s12 request-window" method="POST">
+                <div class="row">
+                    <div class="input-field col s12">
+                        <textarea id="question" name="question" class="materialize-textarea"
+                            autocomplete="off"></textarea>
+                        <label for="question">Placeholder for request</label>
+                    </div>
+                    <div class="input-field col s12 button-switch-container">
+                        <!-- POST Button on the left -->
+                        <button class="btn waves-effect waves-light blue" type="submit" name="action">POST</button>
+                        <!-- Switch Bar on the right -->
+                        <div class="switch">
+                            <label>
+                                Off
+                                <input type="checkbox" id="toggle-switch">
+                                <span class="lever"></span>
+                                On
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Display responses if available -->
+        {% if responses %}
+        <div class="row">
+            <div class="col s12">
+                {% for entry in responses %}
+                <div class="card-panel dark-blue lighten-4">
+                    <div class="collapsible-header" onclick="toggleContent(this)">
+                        <span>Q: {{ entry.question }}</span>
+                    </div>
+                    <div class="collapsible-content">
+                        <div class="scrollable">
+                            <pre class="script-code"><b>A:</b> {{ entry.response | safe }}</pre>
+                            <pre class="script-code"><b>Full:</b> {{ entry.full | safe }}</pre>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
             </div>
         </div>
+        {% endif %}
     </div>
-</footer>
+
+    <!-- Icons for navigation or other actions -->
+    <div class="icon-column">
+        <a href="{{ url_for('gphoto_ui') }}">
+            <img src="{{ url_for('static', filename='images/google-photos.png') }}" alt="gphoto">
+        </a>
+        <a href="{{ url_for('chamini') }}">
+            <img src="{{ url_for('static', filename='images/chamini.png') }}" alt="chamini">
+        </a>
+        <a href="{{ url_for('chater') }}">
+            <img src="{{ url_for('static', filename='images/chater.png') }}" alt="chater">
+        </a>
+        <a href="{{ url_for('gempt') }}">
+            <img src="{{ url_for('static', filename='images/gempt.webp') }}" alt="gempt">
+        </a>
+    </div>
+
+    <!-- JavaScript dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <!-- Custom JavaScript file -->
+    <script src="{{ url_for('static', filename='js/chater.js') }}"></script>
+    <footer class="page-footer">
+        <div class="container">
+            <div class="row">
+                <div class="col s12 center-align">
+                    <!-- Clear Responses Button -->
+                    <a href="{{ url_for('chater_clear_responses') }}"
+                        class="btn waves-effect waves-light green btn-clear">Clear</a>
+                    <!-- Logout Button -->
+                    <a href="{{ url_for('chater_logout') }}" class="btn waves-effect waves-light green">Logout</a>
+                </div>
+            </div>
+        </div>
+    </footer>
 </body>
+
 </html>
