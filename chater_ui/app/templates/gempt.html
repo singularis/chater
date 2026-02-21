@@ -18,12 +18,21 @@
         <h4 class="center-align white-text">Exchange Notes</h4>
         <div class="row">
             <!-- Form for user input -->
-            <form class="col s12 request-window" method="POST">
+            <form class="col s12 request-window" method="POST" enctype="multipart/form-data">
                 <div class="row">
                     <div class="input-field col s12">
                         <textarea id="question" name="note" class="materialize-textarea" autocomplete="off"
                             required></textarea>
                         <label for="question">Type your note here...</label>
+                    </div>
+                    <div class="file-field input-field col s12" style="margin-top: 0;">
+                        <div class="btn waves-effect waves-light blue">
+                            <span>File</span>
+                            <input type="file" name="file">
+                        </div>
+                        <div class="file-path-wrapper">
+                            <input class="file-path validate" type="text" placeholder="Attach a file (optional)">
+                        </div>
                     </div>
                     <div class="input-field col s12 button-switch-container">
                         <!-- POST Button on the left -->
@@ -45,6 +54,12 @@
                     <div class="collapsible-content" style="display: block;">
                         <div class="scrollable">
                             <pre class="script-code">{{ note.content | safe }}</pre>
+                            {% if note.filename %}
+                            <br>
+                            <a href="{{ url_for('gempt_file', filename=note.filename) }}"
+                                class="btn-small waves-effect waves-light green" target="_blank">Download {{
+                                note.original_filename or 'Attachment' }}</a>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

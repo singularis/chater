@@ -192,6 +192,13 @@ def gempt_clear():
     return gempt_clear_ui(session, redis_client)
 
 
+@app.route(dev_route("/gempt_file/<path:filename>"), methods=["GET"])
+@track_operation("gempt_file")
+def gempt_file(filename):
+    from gempt import get_gempt_file
+    return get_gempt_file(session, filename)
+
+
 @app.route(dev_route("/chater_clear_responses"), methods=["GET"])
 @track_operation("chater_clear_responses")
 def chater_clear_responses():
