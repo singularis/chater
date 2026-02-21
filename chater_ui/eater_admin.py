@@ -15,19 +15,22 @@ _parsed = urlparse(ADMIN_PAGE_URL)
 ADMIN_ASSET_BASE = f"{_parsed.scheme}://{_parsed.netloc}"
 
 
+IS_DEV = os.getenv("IS_DEV", "false").lower() == "true"
+URL_PREFIX = "/dev" if IS_DEV else ""
+
 def _rewrite_html_for_proxy(html_text: str) -> str:
     """Rewrite absolute resource URLs to go through our proxy endpoint."""
     if not html_text:
         return html_text
 
     replacements = [
-        ('src="/', 'src="/eater_admin_proxy/'),
-        ("src='/", "src='/eater_admin_proxy/"),
-        ('href="/', 'href="/eater_admin_proxy/'),
-        ("href='/", "href='/eater_admin_proxy/"),
-        ('srcset="/', 'srcset="/eater_admin_proxy/'),
-        ("srcset='/", "srcset='/eater_admin_proxy/"),
-        ("url(/", "url(/eater_admin_proxy/"),
+        ('src="/', f'src="{URL_PREFIX}/eater_admin_proxy/'),
+        ("src='/", f"src='{URL_PREFIX}/eater_admin_proxy/"),
+        ('href="/', f'href="{URL_PREFIX}/eater_admin_proxy/'),
+        ("href='/", f"href='{URL_PREFIX}/eater_admin_proxy/"),
+        ('srcset="/', f'srcset="{URL_PREFIX}/eater_admin_proxy/'),
+        ("srcset='/", f"srcset='{URL_PREFIX}/eater_admin_proxy/"),
+        ("url(/", f"url({URL_PREFIX}/eater_admin_proxy/"),
     ]
 
     rewritten = html_text

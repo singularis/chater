@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 BASE_GPHOTO_URL = os.getenv("GPHOTO_BASE_URL", "http://192.168.0.10:30500")
 
 
+IS_DEV = os.getenv("IS_DEV", "false").lower() == "true"
+URL_PREFIX = "/dev" if IS_DEV else ""
+
 def _rewrite_html_for_proxy(html_text: str) -> str:
     """
     Rewrite common resource URLs in HTML to go through our proxy endpoint so the
@@ -21,13 +24,13 @@ def _rewrite_html_for_proxy(html_text: str) -> str:
         return html_text
 
     replacements = [
-        ('src="/', 'src="/gphoto_proxy/'),
-        ("src='/", "src='/gphoto_proxy/"),
-        ('href="/', 'href="/gphoto_proxy/'),
-        ("href='/", "href='/gphoto_proxy/"),
-        ('srcset="/', 'srcset="/gphoto_proxy/'),
-        ("srcset='/", "srcset='/gphoto_proxy/"),
-        ("url(/", "url(/gphoto_proxy/"),  # CSS url() refs
+        ('src="/', f'src="{URL_PREFIX}/gphoto_proxy/'),
+        ("src='/", f"src='{URL_PREFIX}/gphoto_proxy/"),
+        ('href="/', f'href="{URL_PREFIX}/gphoto_proxy/'),
+        ("href='/", f"href='{URL_PREFIX}/gphoto_proxy/"),
+        ('srcset="/', f'srcset="{URL_PREFIX}/gphoto_proxy/'),
+        ("srcset='/", f"srcset='{URL_PREFIX}/gphoto_proxy/"),
+        ("url(/", f"url({URL_PREFIX}/gphoto_proxy/"),  # CSS url() refs
     ]
 
     rewritten = html_text

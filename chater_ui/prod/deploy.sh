@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-IMAGE_TAG="0.5.3"
+IMAGE_TAG="0.5.4"
 IMAGE="docker.io/singularis314/chater-ui:${IMAGE_TAG}"
 
 docker buildx build --platform linux/amd64,linux/arm64 -t "${IMAGE}" --push ..

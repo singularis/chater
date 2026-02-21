@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Fetch the current switch state from the server on page load
-    fetch('/get-switch-state')
+    fetch('get-switch-state')
         .then(response => response.json())
         .then(data => {
             // Set the switch state based on server response if not found in local storage
@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', function () {
         localStorage.setItem('toggleSwitchState', switchState);
 
         // Send the new switch state to the server
-        fetch('/toggle-switch', {
+        fetch('toggle-switch', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Fetch from server
-    fetch('/get-dev-mode-state')
+    fetch('get-dev-mode-state')
         .then(response => response.json())
         .then(data => {
             if (!savedDevModeState) {
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const switchState = this.checked ? 'on' : 'off';
         localStorage.setItem('devModeSwitchState', switchState);
 
-        fetch('/toggle-dev-mode', {
+        fetch('toggle-dev-mode', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ state: switchState })
