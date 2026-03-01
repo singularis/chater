@@ -8,14 +8,20 @@ from dev_utils import get_topic_name
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-conf = {
-    "bootstrap.servers": os.getenv("BOOTSTRAP_SERVER"),
-    "message.max.bytes": 10000000,
-    "client.id": "python-producer",
-    "acks": "all",
-}
+producer = None
 
-producer = Producer(conf)
+
+def setup_producer():
+    global producer
+    if producer is None:
+        conf = {
+            "bootstrap.servers": os.getenv("BOOTSTRAP_SERVER"),
+            "message.max.bytes": 10000000,
+            "client.id": "python-producer",
+            "acks": "all",
+        }
+        producer = Producer(conf)
+        logger.info("Kafka producer initialized")
 
 
 def delivery_report(err, msg):
@@ -26,7 +32,9 @@ def delivery_report(err, msg):
 
 
 def produce_message(topic, message):
-    topic = get_topic_name(topic)
+    if producer is None:
+        setup_producer()
+
     try:
         # Ensure message has a value field
         if "value" not in message:

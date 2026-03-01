@@ -10,7 +10,7 @@ from google.cloud.dlp_v2.types import (DeidentifyConfig,
                                        PrimitiveTransformation,
                                        ReplaceValueConfig)
 from kafka_consumer import consume_messages
-from kafka_producer import produce_message
+from kafka_producer import produce_message, setup_producer
 from logging_config import setup_logging
 from dev_utils import get_topics_list, is_dev_environment
 
@@ -91,4 +91,5 @@ def process_messages():
 if __name__ == "__main__":
     setup_logging("dlp.log")
     logger.info("Starting DLP processing script")
+    setup_producer()
     process_messages()
