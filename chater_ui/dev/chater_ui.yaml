@@ -121,20 +121,7 @@
                         value: "{{ vars.LOG_LEVEL }}"
                       - name: AUTOCOMPLETE_SERVICE_URL
                         value: "http://eater-users-dev-service"
-                affinity:
-                  nodeAffinity:
-                    requiredDuringSchedulingIgnoredDuringExecution:
-                      nodeSelectorTerms:
-                        - matchExpressions:
-                            - key: kubernetes.io/hostname
-                              operator: In
-                              values:
-                                - "racoon-gpu"
-                tolerations:
-                  - key: "gpu-only"
-                    operator: "Equal"
-                    value: "true"
-                    effect: "NoSchedule"
+
     - name: Create chater-dev Service
       kubernetes.core.k8s:
         state: present

@@ -52,20 +52,7 @@
                         value: "{{ vars.TEST_USER_EMAIL }}"
                       - name: LOG_LEVEL
                         value: "{{ vars.LOG_LEVEL }}"
-                affinity:
-                  nodeAffinity:
-                    requiredDuringSchedulingIgnoredDuringExecution:
-                      nodeSelectorTerms:
-                        - matchExpressions:
-                            - key: kubernetes.io/hostname
-                              operator: In
-                              values:
-                                - racoon-gpu
-                tolerations:
-                  - key: "gpu-only"
-                    operator: "Equal"
-                    value: "true"
-                    effect: "NoSchedule"
+
     - name: Create Admin Service (DEV)
       kubernetes.core.k8s:
         state: present

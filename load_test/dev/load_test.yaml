@@ -36,20 +36,7 @@
                 annotations:
                   co.elastic.logs/enabled: "true"
               spec:
-                affinity:
-                  nodeAffinity:
-                    requiredDuringSchedulingIgnoredDuringExecution:
-                      nodeSelectorTerms:
-                        - matchExpressions:
-                            - key: kubernetes.io/hostname
-                              operator: In
-                              values:
-                                - racoon-gpu
-                tolerations:
-                  - key: "gpu-only"
-                    operator: "Equal"
-                    value: "true"
-                    effect: "NoSchedule"
+
                 containers:
                   - name: locust-dev
                     image: docker.io/singularis314/locust-chater-dev:0.1

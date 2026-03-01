@@ -76,17 +76,4 @@
                         value: "eater-db-dev.eater-dev.svc.cluster.local"
                       - name: LOG_LEVEL
                         value: "{{ vars.LOG_LEVEL }}"
-                affinity:
-                  nodeAffinity:
-                    requiredDuringSchedulingIgnoredDuringExecution:
-                      nodeSelectorTerms:
-                        - matchExpressions:
-                            - key: kubernetes.io/hostname
-                              operator: In
-                              values:
-                                - racoon-gpu
-                tolerations:
-                  - key: "gpu-only"
-                    operator: "Equal"
-                    value: "true"
-                    effect: "NoSchedule"
+

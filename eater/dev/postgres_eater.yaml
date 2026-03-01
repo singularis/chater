@@ -53,10 +53,7 @@
                           values:
                             - eater-db-dev
                     topologyKey: kubernetes.io/hostname
-            tolerations:
-              - key: gpu-only
-                operator: Exists
-                effect: NoSchedule
+
       register: result
     - name: Create local directory for eater-postgres-dev
       ansible.builtin.file:
@@ -94,30 +91,4 @@
                         operator: In
                         values:
                           - "racoon"
-    - name: Create eater_postgres_dev PersistentVolume (racoon-gpu)
-      kubernetes.core.k8s:
-        state: present
-        namespace: eater-dev
-        definition:
-          apiVersion: v1
-          kind: PersistentVolume
-          metadata:
-            name: eater-postgres-dev-pvc-gpu
-            namespace: eater-dev
-          spec:
-            capacity:
-              storage: 5Gi
-            volumeMode: Filesystem
-            accessModes:
-              - ReadWriteOnce
-            persistentVolumeReclaimPolicy: Recycle
-            local:
-              path: /other/eater_postgres_dev
-            nodeAffinity:
-              required:
-                nodeSelectorTerms:
-                  - matchExpressions:
-                      - key: kubernetes.io/hostname
-                        operator: In
-                        values:
-                          - "racoon-gpu"
+
