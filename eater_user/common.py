@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 from functools import wraps
@@ -6,20 +5,18 @@ from functools import wraps
 import jwt
 from fastapi import HTTPException, Request
 
-SECRET_KEY = os.getenv("EATER_SECRET_KEY")
+SECRET_KEY = os.getenv("JWT_SECRET")
+
 
 
 def get_jwt_secret_key():
+    """
+    Returns the JWT secret key from the JWT_SECRET environment variable.
+    The key must be ≥32 bytes (enforced at issuance time by chater-auth).
+    """
     if not SECRET_KEY:
-        raise ValueError("EATER_SECRET_KEY environment variable not set")
-
-    secret_bytes = SECRET_KEY.encode("utf-8")
-
-    if len(secret_bytes) >= 32:
-        return SECRET_KEY
-
-    hash_obj = hashlib.sha256(secret_bytes)
-    return hash_obj.digest()
+        raise ValueError("JWT_SECRET environment variable not set")
+    return SECRET_KEY
 
 
 def verify_jwt_token(token: str):

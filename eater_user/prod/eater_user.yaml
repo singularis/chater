@@ -70,8 +70,9 @@
                         value: "{{ vars.EATER.DB_NAME }}"
                       - name: POSTGRES_HOST
                         value: "{{ vars.EATER.POSTGRES_HOST }}"
-                      - name: EATER_SECRET_KEY
-                        value: "{{ vars.EATER_SECRET_KEY }}"
+                      - name: JWT_SECRET
+                        value: "{{ vars.JWT_SECRET }}"
+
                       - name: REDIS_ENDPOINT
                         value: "{{ vars.REDIS_ENDPOINT }}"
                       - name: NEO4J_URI

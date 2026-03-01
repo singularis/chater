@@ -43,11 +43,22 @@
                     env:
                       - name: IS_DEV
                         value: "true"
-                      - name: EATER_SECRET_KEY
+                      # ── JWT signing secret (server-side only, never in client) ──
+                      - name: JWT_SECRET
                         valueFrom:
                           secretKeyRef:
                             name: chater-auth-dev
-                            key: EATER_SECRET_KEY
+                            key: JWT_SECRET
+                      # ── Google OAuth ──
+                      - name: GOOGLE_CLIENT_ID
+                        value: "{{ vars.GOOGLE_CLIENT_ID }}"
+                      # ── Apple OAuth ──
+                      - name: APPLE_BUNDLE_ID
+                        value: "{{ vars.APPLE_BUNDLE_ID }}"
+                      # ── Token lifetime ──
+                      - name: JWT_EXPIRATION_HOURS
+                        value: "{{ vars.JWT_EXPIRATION_HOURS }}"
+                      # ── Infrastructure ──
                       - name: BOOTSTRAP_SERVERS
                         value: "{{ vars.BOOTSTRAP_SERVER }}"
                       - name: LOG_LEVEL
@@ -66,4 +77,4 @@
             name: chater-auth-dev
             namespace: chater-auth-dev
           data:
-            EATER_SECRET_KEY: "{{ vars.EATER_SECRET_KEY | b64encode }}"
+            JWT_SECRET: "{{ vars.JWT_SECRET | b64encode }}"

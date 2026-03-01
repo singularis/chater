@@ -34,7 +34,14 @@
             <scope>runtime</scope>
         </dependency>
         
-        <!-- Google Auth Library for Google ID token verification - SECURITY FIX: Updated to latest version -->
+        <!-- Google API Client: provides GoogleIdTokenVerifier for cryptographic token verification -->
+        <dependency>
+            <groupId>com.google.api-client</groupId>
+            <artifactId>google-api-client</artifactId>
+            <version>2.7.0</version>
+        </dependency>
+
+        <!-- Google Auth Library for Google ID token verification -->
         <dependency>
             <groupId>com.google.auth</groupId>
             <artifactId>google-auth-library-oauth2-http</artifactId>

@@ -1,5 +1,4 @@
 import base64
-import hashlib
 import io
 import logging
 import os
@@ -17,7 +16,11 @@ from PIL import Image
 from user import get_user_language, update_user_activity
 
 logger = logging.getLogger(__name__)
-SECRET_KEY = str(os.getenv("EATER_SECRET_KEY"))
+_jwt_secret = os.getenv("JWT_SECRET")
+if not _jwt_secret or _jwt_secret == "None":
+    raise RuntimeError("JWT_SECRET environment variable is not set")
+SECRET_KEY = _jwt_secret
+
 PROMPT_FILE = "eater/prompt.yaml"
 
 # Redis client for rate limiting
@@ -29,27 +32,12 @@ KEY_PREFIX = "_dev:" if IS_DEV else ""
 
 def get_jwt_secret_key():
     """
-    Get the JWT secret key, deriving a 256-bit key if the original is too short.
-    This matches the logic used in the chater-auth service.
+    Returns the JWT secret key read from the JWT_SECRET environment variable.
+    The key must be ≥32 bytes (enforced at token issuance time by chater-auth).
     """
-    if not SECRET_KEY:
-        raise ValueError("EATER_SECRET_KEY environment variable not set")
-
-    secret_bytes = SECRET_KEY.encode("utf-8")
-
-    # If the secret is already 32+ bytes, use it directly
-    # Otherwise, derive a 256-bit key using SHA-256
-    if len(secret_bytes) >= 32:
-        return SECRET_KEY
-    else:
-        # Derive a 256-bit key from the secret using SHA-256
-        hash_obj = hashlib.sha256(secret_bytes)
-        derived_key = hash_obj.digest()
-        logger.debug(
-            "Secret key was too short (%d bits), derived 256-bit key using SHA-256",
-            len(secret_bytes) * 8,
-        )
-        return derived_key
+    if not SECRET_KEY or SECRET_KEY == "None":
+        raise ValueError("JWT_SECRET environment variable not set")
+    return SECRET_KEY
 
 
 def before_request(session, app, SESSION_LIFETIME):

@@ -80,8 +80,9 @@
                         value: "{{ vars.GOOGLE_OAUTH_CLIENT_SECRET }}"
                       - name: ALLOWED_EMAILS
                         value: "{{ vars.ALLOWED_EMAILS }}"
-                      - name: EATER_SECRET_KEY
-                        value: "{{ vars.EATER_SECRET_KEY }}"
+                      - name: JWT_SECRET
+                        value: "{{ vars.JWT_SECRET }}"
+
                       - name: REDIS_ENDPOINT
                         value: "{{ vars.REDIS_ENDPOINT }}"
                       - name: DAILY_REQUEST_LIMIT

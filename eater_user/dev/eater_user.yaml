@@ -59,8 +59,9 @@
                         value: "eater_dev"
                       - name: POSTGRES_HOST
                         value: "eater-db-dev.eater-dev.svc.cluster.local"
-                      - name: EATER_SECRET_KEY
-                        value: "{{ vars.EATER_SECRET_KEY }}"
+                      - name: JWT_SECRET
+                        value: "{{ vars.JWT_SECRET }}"
+
                       - name: REDIS_ENDPOINT
                         value: "{{ vars.REDIS_ENDPOINT }}"
                       - name: NEO4J_URI

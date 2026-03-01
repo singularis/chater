@@ -1,53 +1,38 @@
-import datetime
-import hashlib
+"""
+Local dev helper — generates a short-lived JWT signed with the same key
+as the backend, useful for manual API testing.
 
-import jwt
+Usage:
+    cd helpers/
+    python generate_jwt.py
+"""
+import datetime
 import yaml
+import jwt
 
 with open("../vars.yaml", "r") as file:
     config = yaml.safe_load(file)
-    SECRET_KEY = config.get("EATER_SECRET_KEY", "default_secret_key")
-    print(SECRET_KEY)
+
+SECRET_KEY = config.get("JWT_SECRET")
+if not SECRET_KEY:
+    raise ValueError("JWT_SECRET not set in vars.yaml")
+
+print(f"Using JWT_SECRET from vars.yaml (first 8 chars): {SECRET_KEY[:8]}...")
 
 
-def get_jwt_secret_key():
-    """
-    Get the JWT secret key, deriving a 256-bit key if the original is too short.
-    This matches the logic used in the chater-auth service.
-    """
-    if not SECRET_KEY:
-        raise ValueError("EATER_SECRET_KEY not set in vars.yaml")
-
-    secret_bytes = SECRET_KEY.encode("utf-8")
-
-    # If the secret is already 32+ bytes, use it directly
-    # Otherwise, derive a 256-bit key using SHA-256
-    if len(secret_bytes) >= 32:
-        return SECRET_KEY
-    else:
-        # Derive a 256-bit key from the secret using SHA-256
-        hash_obj = hashlib.sha256(secret_bytes)
-        derived_key = hash_obj.digest()
-        print(
-            f"Secret key was too short ({len(secret_bytes) * 8} bits), derived 256-bit key using SHA-256"
-        )
-        return derived_key
-
-
-def generate_token():
-    jwt_secret = get_jwt_secret_key()
+def generate_token(email: str = "singularis", hours: int = 48) -> str:
+    now = datetime.datetime.now(datetime.timezone.utc)
     payload = {
-        "exp": datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=20000),
-        "iat": datetime.datetime.now(datetime.timezone.utc),
-        "sub": "singularis",
+        "sub":  email,
+        "iat":  now,
+        "exp":  now + datetime.timedelta(hours=hours),
     }
-    token = jwt.encode(payload, jwt_secret, algorithm="HS256")
-    decode = jwt.decode(token, jwt_secret, algorithms=["HS256"])
-    print(f"Decode {decode}")
+    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    print(f"Decoded payload: {decoded}")
     return token
 
 
 if __name__ == "__main__":
     token = generate_token()
-    print(f"{token}")
+    print(f"\nToken:\n{token}")
