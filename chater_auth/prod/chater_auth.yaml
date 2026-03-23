@@ -39,7 +39,7 @@
                 containers:
                   - name: chater-auth
                     image: docker.io/singularis314/chater-auth:0.1
-                    imagePullPolicy: Always
+                    imagePullPolicy: IfNotPresent
                     env:
                       # ── JWT signing secret (server-side only, never in client) ──
                       - name: JWT_SECRET

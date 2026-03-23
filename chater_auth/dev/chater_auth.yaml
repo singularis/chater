@@ -39,7 +39,7 @@
                 containers:
                   - name: chater-auth-dev
                     image: docker.io/singularis314/chater-auth-dev:0.1
-                    imagePullPolicy: Always
+                    imagePullPolicy: IfNotPresent
                     env:
                       - name: IS_DEV
                         value: "true"
