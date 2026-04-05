@@ -26,7 +26,6 @@ async def test_database_connection():
         return False
 
 
-
 async def ensure_nickname_column():
     try:
         query = """
@@ -41,9 +40,11 @@ async def ensure_nickname_column():
         # Note: 'database.execute' might handle the DO block or we might need simple ALTER with exception catch
         # simpler approach:
         try:
-             await database.execute('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nickname TEXT')
+            await database.execute(
+                'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nickname TEXT'
+            )
         except Exception:
-             pass # Ignore if exists or other error (persist anyway)
+            pass  # Ignore if exists or other error (persist anyway)
     except Exception:
         pass
 
@@ -51,16 +52,15 @@ async def ensure_nickname_column():
 async def nickname_is_taken(nickname: str, exclude_email: str) -> bool:
     """True if another user (different email) already has this nickname (case-insensitive)."""
     try:
-        query = '''
+        query = """
             SELECT 1 FROM "user"
             WHERE lower(trim(nickname)) = lower(:nickname)
             AND lower(email) != lower(:exclude_email)
             AND nickname IS NOT NULL AND trim(nickname) != ''
             LIMIT 1
-        '''
+        """
         row = await database.fetch_one(
-            query,
-            values={"nickname": nickname.strip(), "exclude_email": exclude_email}
+            query, values={"nickname": nickname.strip(), "exclude_email": exclude_email}
         )
         return row is not None
     except Exception:
@@ -69,7 +69,9 @@ async def nickname_is_taken(nickname: str, exclude_email: str) -> bool:
 
 async def update_nickname(user_email: str, nickname: str):
     query = 'UPDATE "user" SET nickname = :nickname WHERE email = :user_email'
-    await database.execute(query, values={"nickname": nickname, "user_email": user_email})
+    await database.execute(
+        query, values={"nickname": nickname, "user_email": user_email}
+    )
 
 
 async def get_nickname(user_email: str):
@@ -128,7 +130,7 @@ async def autocomplete_query(query: str, limit: int, user_email: str):
         for row in results:
             user = {
                 "email": row["email"],
-                "nickname": row["nickname"], # Add nickname to result
+                "nickname": row["nickname"],  # Add nickname to result
                 "register_date": (
                     row["register_date"].isoformat() if row["register_date"] else None
                 ),
@@ -229,7 +231,9 @@ async def get_activity_summary(user_email: str, date: str):
         WHERE user_email = :user_email
           AND date = :date
         """
-        row = await database.fetch_one(query, values={"user_email": user_email, "date": date})
+        row = await database.fetch_one(
+            query, values={"user_email": user_email, "date": date}
+        )
         if not row:
             return {"total_calories": 0, "activity_types": []}
         types = row["activity_types"] or []
@@ -274,10 +278,9 @@ async def get_food_record_by_time(time: int, user_email: str):
 # MARK: - Chess Games Functions
 
 
-
-
-
-async def record_chess_game(player_email: str, opponent_email: str, result: str, timestamp: int):
+async def record_chess_game(
+    player_email: str, opponent_email: str, result: str, timestamp: int
+):
     """
     Record a chess game for both players.
     result: "win", "loss", or "draw"
@@ -288,25 +291,33 @@ async def record_chess_game(player_email: str, opponent_email: str, result: str,
         INSERT INTO chess_games (player_email, opponent_email, result, timestamp)
         VALUES (:player_email, :opponent_email, :result, :timestamp)
         """
-        await database.execute(query_player, values={
-            "player_email": player_email,
-            "opponent_email": opponent_email,
-            "result": result,
-            "timestamp": timestamp,
-        })
+        await database.execute(
+            query_player,
+            values={
+                "player_email": player_email,
+                "opponent_email": opponent_email,
+                "result": result,
+                "timestamp": timestamp,
+            },
+        )
 
         # Record mirror game for opponent
-        opponent_result = "loss" if result == "win" else ("win" if result == "loss" else "draw")
+        opponent_result = (
+            "loss" if result == "win" else ("win" if result == "loss" else "draw")
+        )
         query_opponent = """
         INSERT INTO chess_games (player_email, opponent_email, result, timestamp)
         VALUES (:player_email, :opponent_email, :result, :timestamp)
         """
-        await database.execute(query_opponent, values={
-            "player_email": opponent_email,
-            "opponent_email": player_email,
-            "result": opponent_result,
-            "timestamp": timestamp,
-        })
+        await database.execute(
+            query_opponent,
+            values={
+                "player_email": opponent_email,
+                "opponent_email": player_email,
+                "result": opponent_result,
+                "timestamp": timestamp,
+            },
+        )
 
         return True
     except Exception as e:
@@ -327,10 +338,13 @@ async def get_chess_stats(user_email: str, opponent_email: str = None):
             FROM chess_games
             WHERE player_email = :user_email AND opponent_email = :opponent_email
             """
-            row = await database.fetch_one(query, values={
-                "user_email": user_email,
-                "opponent_email": opponent_email,
-            })
+            row = await database.fetch_one(
+                query,
+                values={
+                    "user_email": user_email,
+                    "opponent_email": opponent_email,
+                },
+            )
         else:
             # Find last opponent
             query_last = """
@@ -340,9 +354,12 @@ async def get_chess_stats(user_email: str, opponent_email: str = None):
             ORDER BY timestamp DESC
             LIMIT 1
             """
-            last_game = await database.fetch_one(query_last, values={
-                "user_email": user_email,
-            })
+            last_game = await database.fetch_one(
+                query_last,
+                values={
+                    "user_email": user_email,
+                },
+            )
 
             if not last_game:
                 return None
@@ -358,10 +375,13 @@ async def get_chess_stats(user_email: str, opponent_email: str = None):
             FROM chess_games
             WHERE player_email = :user_email AND opponent_email = :opponent_email
             """
-            row = await database.fetch_one(query, values={
-                "user_email": user_email,
-                "opponent_email": opponent_email,
-            })
+            row = await database.fetch_one(
+                query,
+                values={
+                    "user_email": user_email,
+                    "opponent_email": opponent_email,
+                },
+            )
 
         if row:
             wins = row["wins"] or 0
@@ -373,10 +393,13 @@ async def get_chess_stats(user_email: str, opponent_email: str = None):
 
             # Format last game date
             import datetime
+
             last_timestamp = row["last_game_timestamp"]
             last_date = ""
             if last_timestamp:
-                dt = datetime.datetime.fromtimestamp(last_timestamp / 1000, tz=datetime.timezone.utc)
+                dt = datetime.datetime.fromtimestamp(
+                    last_timestamp / 1000, tz=datetime.timezone.utc
+                )
                 last_date = dt.strftime("%Y-%m-%d")
 
             return {
@@ -525,14 +548,16 @@ async def get_chess_history(user_email: str, limit: int = 50, offset: int = 0):
             ts = r["timestamp"]
             dt = _dt.datetime.fromtimestamp(ts / 1000, tz=_dt.timezone.utc)
             opp_nickname = await get_nickname(r["opponent_email"])
-            games.append({
-                "opponent_email": r["opponent_email"],
-                "opponent_nickname": opp_nickname or r["opponent_email"],
-                "result": r["result"],
-                "timestamp": ts,
-                "date": dt.strftime("%Y-%m-%d"),
-                "time": dt.strftime("%H:%M"),
-            })
+            games.append(
+                {
+                    "opponent_email": r["opponent_email"],
+                    "opponent_nickname": opp_nickname or r["opponent_email"],
+                    "result": r["result"],
+                    "timestamp": ts,
+                    "date": dt.strftime("%Y-%m-%d"),
+                    "time": dt.strftime("%H:%M"),
+                }
+            )
 
         return {"games": games, "total": total, "limit": limit, "offset": offset}
     except Exception as e:

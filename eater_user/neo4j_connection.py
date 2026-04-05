@@ -36,7 +36,6 @@ class Neo4jConnection:
             if not record or record["test"] != 1:
                 raise Exception("Neo4j connectivity test failed")
 
-    
     def _get_user_label(self):
         is_dev = os.getenv("IS_DEV", "false").lower() == "true"
         return "User_dev" if is_dev else "User"
@@ -44,7 +43,7 @@ class Neo4jConnection:
     def add_friend_relationship(self, user_email: str, friend_email: str) -> bool:
         if not self.driver:
             raise Exception("Neo4j driver not initialized")
-        
+
         label = self._get_user_label()
 
         with self.driver.session() as session:
@@ -72,7 +71,7 @@ class Neo4jConnection:
     def check_friendship_exists(self, user_email: str, friend_email: str) -> bool:
         if not self.driver:
             raise Exception("Neo4j driver not initialized")
-        
+
         label = self._get_user_label()
 
         with self.driver.session() as session:
@@ -95,7 +94,7 @@ class Neo4jConnection:
     def get_user_friends(self, user_email: str) -> list:
         if not self.driver:
             raise Exception("Neo4j driver not initialized")
-        
+
         label = self._get_user_label()
 
         with self.driver.session() as session:

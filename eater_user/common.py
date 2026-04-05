@@ -8,7 +8,6 @@ from fastapi import HTTPException, Request
 SECRET_KEY = os.getenv("JWT_SECRET")
 
 
-
 def get_jwt_secret_key():
     """
     Returns the JWT secret key from the JWT_SECRET environment variable.

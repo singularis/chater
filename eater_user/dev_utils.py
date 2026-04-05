@@ -2,10 +2,12 @@
 Common utilities for dev environment support.
 Provides functions to handle dev-specific configurations like Kafka topic suffixes.
 """
+
 import os
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 def is_dev_environment() -> bool:
     """Check if running in dev environment based on IS_DEV env variable."""
@@ -15,10 +17,10 @@ def is_dev_environment() -> bool:
 def get_topic_name(base_topic: str) -> str:
     """
     Get the topic name with optional _dev suffix for dev environment.
-    
+
     Args:
         base_topic: The base topic name (e.g., "gpt-send")
-        
+
     Returns:
         Topic name with _dev suffix if IS_DEV=true, otherwise the base topic
     """
@@ -30,10 +32,10 @@ def get_topic_name(base_topic: str) -> str:
 def get_topics_list(base_topics: list) -> list:
     """
     Get a list of topic names with optional _dev suffix for dev environment.
-    
+
     Args:
         base_topics: List of base topic names
-        
+
     Returns:
         List of topic names with _dev suffix if IS_DEV=true
     """
@@ -43,10 +45,10 @@ def get_topics_list(base_topics: list) -> list:
 def get_db_name(base_db: str) -> str:
     """
     Get the database name with optional _dev suffix for dev environment.
-    
+
     Args:
         base_db: The base database name (e.g., "eater")
-        
+
     Returns:
         Database name with _dev suffix if IS_DEV=true, otherwise the base name
     """
@@ -58,10 +60,10 @@ def get_db_name(base_db: str) -> str:
 def get_kafka_group_id(base_group_id: str) -> str:
     """
     Get the Kafka group ID with optional -dev suffix for dev environment.
-    
+
     Args:
         base_group_id: The base group ID (e.g., "eater")
-        
+
     Returns:
         Group ID with -dev suffix if IS_DEV=true, otherwise the base group ID
     """

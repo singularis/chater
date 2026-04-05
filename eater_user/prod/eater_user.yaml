@@ -54,7 +54,7 @@
                               values: ["racoon"]
                 containers:
                   - name: eater-users
-                    image: docker.io/singularis314/eater-users:0.2.2
+                    image: docker.io/singularis314/eater-users:0.2.3
                     imagePullPolicy: IfNotPresent
                     env:
                       - name: BOOTSTRAP_SERVER

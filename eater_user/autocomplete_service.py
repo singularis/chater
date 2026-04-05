@@ -3,23 +3,34 @@ import json
 import logging
 import os
 import uuid
+import time
+
 
 import uvicorn
 from common import token_required, validate_websocket_token
 from connection_manager import manager, safe_send_websocket_message
-from fastapi import (FastAPI, HTTPException, Request, WebSocket,
-                     WebSocketDisconnect)
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from kafka_producer import produce_message
 from dev_utils import get_topic_name
 from logging_config import setup_logging
 from neo4j_connection import neo4j_connection
-from postgres import (autocomplete_query, database, get_food_record_by_time,
-                      ensure_nickname_column, update_nickname, get_nickname,
-                      nickname_is_taken, update_goal,
-                      log_activity_entry, get_activity_summary,
-                      record_chess_game, get_chess_stats, get_all_chess_data,
-                      get_chess_history)
+from postgres import (
+    autocomplete_query,
+    database,
+    get_food_record_by_time,
+    ensure_nickname_column,
+    update_nickname,
+    get_nickname,
+    nickname_is_taken,
+    update_goal,
+    log_activity_entry,
+    get_activity_summary,
+    record_chess_game,
+    get_chess_stats,
+    get_all_chess_data,
+    get_chess_history,
+)
 from proto import add_friend_pb2, get_friends_pb2, share_food_pb2
 from starlette.websockets import WebSocketState
 
@@ -28,14 +39,47 @@ app = FastAPI(title="Autocomplete Service", version="1.0.0")
 setup_logging("autocomplete_service.log")
 logger = logging.getLogger("autocomplete_service")
 
+
+async def _connect_with_retry(
+    connect_func, service_name, start_time, timeout_seconds=7 * 24 * 3600
+):
+    delay = 60
+    while True:
+        try:
+            if asyncio.iscoroutinefunction(connect_func):
+                await connect_func()
+            else:
+                connect_func()
+            logger.info(f"Successfully connected to {service_name}")
+            break
+        except Exception as e:
+            if time.time() - start_time > timeout_seconds:
+                logger.error(
+                    f"Failed to connect to {service_name} after {timeout_seconds} seconds: {e}"
+                )
+                raise
+            logger.warning(
+                f"Failed to connect to {service_name}, retrying in {delay}s... (Error: {e})"
+            )
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 3600)
+
+
 @app.on_event("startup")
 async def startup():
-    await database.connect()
+    start_time = time.time()
+    try:
+        # Connect to Postgres and Neo4j using the retry helper
+        await _connect_with_retry(database.connect, "Postgres", start_time)
+        await _connect_with_retry(neo4j_connection.connect, "Neo4j", start_time)
+        logger.info("Successfully connected to postgres and neo4j")
+    except Exception as e:
+        logger.error(f"Failed to connect to postgres or neo4j: {e}")
+        raise
     try:
         await ensure_nickname_column()
     except Exception:
         logger.warning("Could not ensure nickname column")
-    neo4j_connection.connect()
 
 
 @app.on_event("shutdown")
@@ -122,7 +166,9 @@ def _nickname_valid(raw: str) -> bool:
     if not raw or len(raw) > 50:
         return False
     normalized = _normalize_nickname(raw)
-    return len(normalized) >= 1 and all(c.isascii() and (c.islower() or c.isdigit()) for c in normalized)
+    return len(normalized) >= 1 and all(
+        c.isascii() and (c.islower() or c.isdigit()) for c in normalized
+    )
 
 
 @app.post("/activity/log")
@@ -149,9 +195,11 @@ async def activity_log_endpoint(request: Request, user_email: str):
         # Default time/date if not provided
         if time_value is None:
             import time as _time
+
             time_value = int(_time.time() * 1000)
         if date_str is None:
             import datetime as _dt
+
             date_str = _dt.datetime.utcnow().date().isoformat()
 
         await log_activity_entry(
@@ -181,6 +229,7 @@ async def activity_summary_endpoint(request: Request, user_email: str):
         date_str = request.query_params.get("date")
         if not date_str:
             import datetime as _dt
+
             date_str = _dt.datetime.utcnow().date().isoformat()
 
         summary = await get_activity_summary(user_email=user_email, date=date_str)
@@ -216,9 +265,9 @@ async def update_goal_endpoint(request: Request, user_email: str):
             target_weight=float(target_weight),
             goal_mode=str(goal_mode),
             goal_months=int(goal_months) if goal_months is not None else None,
-            recommended_calories=int(recommended_calories)
-            if recommended_calories is not None
-            else None,
+            recommended_calories=(
+                int(recommended_calories) if recommended_calories is not None else None
+            ),
         )
         return {"success": True}
     except HTTPException:
@@ -244,7 +293,7 @@ async def update_nickname_endpoint(request: Request, user_email: str):
         if not _nickname_valid(nickname):
             raise HTTPException(
                 status_code=400,
-                detail="Nickname must contain only Latin lowercase letters and digits (a-z, 0-9)"
+                detail="Nickname must contain only Latin lowercase letters and digits (a-z, 0-9)",
             )
 
         normalized = _normalize_nickname(nickname)
@@ -260,6 +309,7 @@ async def update_nickname_endpoint(request: Request, user_email: str):
         logger.error(f"Error updating nickname: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @app.get(
     "/autocomplete/getfriend",
     responses={200: {"content": {"application/x-protobuf": {}}}},
@@ -268,7 +318,9 @@ async def update_nickname_endpoint(request: Request, user_email: str):
 async def get_friends_endpoint(request: Request, user_email: str):
     try:
         friends_list = neo4j_connection.get_user_friends(user_email)
-        logger.debug(f"/autocomplete/getfriend: Found {len(friends_list)} friends for {user_email}")
+        logger.debug(
+            f"/autocomplete/getfriend: Found {len(friends_list)} friends for {user_email}"
+        )
 
         response = get_friends_pb2.GetFriendsResponse()
         response.count = len(friends_list)
@@ -281,11 +333,17 @@ async def get_friends_endpoint(request: Request, user_email: str):
                 nickname = await get_nickname(friend_email)
                 if nickname:
                     friend.nickname = nickname
-                    logger.debug(f"/autocomplete/getfriend: Friend {friend_email} has nickname '{nickname}'")
+                    logger.debug(
+                        f"/autocomplete/getfriend: Friend {friend_email} has nickname '{nickname}'"
+                    )
                 else:
-                    logger.debug(f"/autocomplete/getfriend: Friend {friend_email} has no nickname")
+                    logger.debug(
+                        f"/autocomplete/getfriend: Friend {friend_email} has no nickname"
+                    )
             except Exception as e:
-                logger.error(f"/autocomplete/getfriend: Error fetching nickname for {friend_email}: {e}")
+                logger.error(
+                    f"/autocomplete/getfriend: Error fetching nickname for {friend_email}: {e}"
+                )
 
         return Response(
             content=response.SerializeToString(), media_type="application/x-protobuf"
@@ -415,7 +473,9 @@ async def share_food_endpoint(request: Request, user_email: str):
             },
         }
         # Send friend payload
-        produce_message(topic=get_topic_name("photo-analysis-response"), message=friend_payload)
+        produce_message(
+            topic=get_topic_name("photo-analysis-response"), message=friend_payload
+        )
 
         # Modify original record after sending friend message
         remaining_percentage = 100 - percentage
@@ -428,25 +488,31 @@ async def share_food_endpoint(request: Request, user_email: str):
             },
         }
         # Send modify payload for remaining percentage
-        produce_message(topic=get_topic_name("modify_food_record"), message=modify_payload)
+        produce_message(
+            topic=get_topic_name("modify_food_record"), message=modify_payload
+        )
 
         response = share_food_pb2.ShareFoodResponse()
         response.success = True
-        
+
         # Return nickname or fallback to email
         try:
             target_nickname = await get_nickname(to_email)
             if target_nickname:
-                 logger.debug(f"Found nickname '{target_nickname}' for {to_email}")
-                 response.nickname_used = target_nickname
+                logger.debug(f"Found nickname '{target_nickname}' for {to_email}")
+                response.nickname_used = target_nickname
             else:
-                 logger.warning(f"No nickname found for {to_email}, falling back to email")
-                 response.nickname_used = to_email
+                logger.warning(
+                    f"No nickname found for {to_email}, falling back to email"
+                )
+                response.nickname_used = to_email
         except Exception as e:
             logger.error(f"Error fetching nickname for {to_email}: {e}")
             response.nickname_used = to_email
 
-        logger.debug(f"/autocomplete/sharefood: success, shared with {response.nickname_used}")
+        logger.debug(
+            f"/autocomplete/sharefood: success, shared with {response.nickname_used}"
+        )
         return Response(
             content=response.SerializeToString(), media_type="application/x-protobuf"
         )
@@ -568,11 +634,17 @@ async def record_chess_game_endpoint(request: Request, user_email: str):
         timestamp = int(body.get("timestamp") or 0)
 
         if not player_email or not opponent_email:
-            raise HTTPException(status_code=400, detail="player_email and opponent_email required")
+            raise HTTPException(
+                status_code=400, detail="player_email and opponent_email required"
+            )
         if player_email != user_email:
-            raise HTTPException(status_code=403, detail="Cannot record game for another user")
+            raise HTTPException(
+                status_code=403, detail="Cannot record game for another user"
+            )
         if result not in ("win", "loss", "draw"):
-            raise HTTPException(status_code=400, detail="result must be win, loss, or draw")
+            raise HTTPException(
+                status_code=400, detail="result must be win, loss, or draw"
+            )
 
         ok = await record_chess_game(player_email, opponent_email, result, timestamp)
         if not ok:
