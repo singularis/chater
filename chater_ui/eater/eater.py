@@ -132,18 +132,7 @@ def eater_custom_date(request, user_email):
 def delete_food_record(request, user_email):
     logger.info("Deleting food entry", extra={"user_email": user_email})
     try:
-        result = delete_food(request=request, user_email=user_email)
-        # Invalidate recommendation cache on successful delete
-        is_success = False
-        if isinstance(result, tuple) and result[1] == 200:
-            is_success = True
-        elif result == "Success":
-            is_success = True
-        
-        if is_success:
-            invalidate_recommendation_cache(user_email)
-            
-        return result
+        return delete_food(request=request, user_email=user_email)
     except Exception:
         logger.exception("Failed to delete food entry for user %s", user_email)
         return "Failed"
@@ -152,8 +141,16 @@ def delete_food_record(request, user_email):
 def modify_food_record_data(request, user_email):
     logger.info("Updating food record", extra={"user_email": user_email})
     try:
-        result = modify_food_record(request=request, user_email=user_email)
-        # Invalidate recommendation cache on successful update
+        return modify_food_record(request=request, user_email=user_email)
+    except Exception:
+        logger.exception("Failed to update food record for user %s", user_email)
+        return "Failed"
+
+
+def modify_food_manual_data(request, user_email):
+    logger.info("Updating food record manually", extra={"user_email": user_email})
+    try:
+        result = modify_food_manual(request=request, user_email=user_email)
         is_success = False
         if isinstance(result, tuple) and result[1] == 200:
             is_success = True
@@ -164,15 +161,6 @@ def modify_food_record_data(request, user_email):
             invalidate_recommendation_cache(user_email)
             
         return result
-    except Exception:
-        logger.exception("Failed to update food record for user %s", user_email)
-        return "Failed"
-
-
-def modify_food_manual_data(request, user_email):
-    logger.info("Updating food record manually", extra={"user_email": user_email})
-    try:
-        return modify_food_manual(request=request, user_email=user_email)
     except Exception:
         logger.exception(
             "Failed to update food record manually for user %s", user_email

@@ -16,8 +16,8 @@ redis_client = redis.StrictRedis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db
 IS_DEV = os.getenv("IS_DEV", "false").lower() == "true"
 KEY_PREFIX = "_dev:" if IS_DEV else ""
 
-# Cache expiry: 12 hours (in seconds)
-RECOMMENDATION_CACHE_TTL = 12 * 60 * 60
+# Cache expiry: 7 days (in seconds)
+RECOMMENDATION_CACHE_TTL = 7 * 24 * 60 * 60
 
 
 def _get_recommendation_cache_key(user_email: str) -> str:
