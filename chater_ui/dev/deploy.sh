@@ -38,7 +38,6 @@ for i in {1..10}; do
     if kubectl get pods -n chater-ui-dev | grep chater-ui-dev | grep Running; then
         echo "Pod is running"
         break
-    else
     fi
 done
 

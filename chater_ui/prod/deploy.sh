@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-IMAGE_TAG="0.5.7"
+IMAGE_TAG="0.5.10"
 
 # Auto-increment the image tag
 SCRIPT_FILE=$(readlink -f "$0")
@@ -39,7 +39,6 @@ for i in {1..10}; do
     if kubectl get pods -n chater-ui | grep chater-ui | grep Running; then
         echo "Pod is running"
         break
-    else
     fi
 done
 

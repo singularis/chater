@@ -60,9 +60,13 @@ def logout(session):
                 headers={"content-type": "application/x-www-form-urlencoded"},
             )
             assert response.ok, "Failed to revoke token"
-            session.pop("google_id", None)
-            session.pop("user_email", None)
         except Exception as e:
             logger.error("Failed to revoke Google token: %s", e)
+    
+    # Unconditionally clear user identity from the session
+    session.pop("google_id", None)
+    session.pop("user_email", None)
+    session.pop("username", None)
     session.pop("logged_in", None)
+    
     return redirect(url_for("chater_login"))
