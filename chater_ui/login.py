@@ -41,6 +41,7 @@ def login(session):
                 logger.info("User %s successfully authenticated", form.username.data)
                 session.permanent = True
                 session["logged_in"] = True
+                session["username"] = form.username.data
                 return redirect(url_for("chamini"))
             else:
                 LAST_FAILED_ATTEMPT_TIME = datetime.now()

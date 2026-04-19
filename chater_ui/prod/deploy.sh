@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-IMAGE_TAG="0.5.5"
+IMAGE_TAG="0.5.7"
 
 # Auto-increment the image tag
 SCRIPT_FILE=$(readlink -f "$0")
