@@ -132,7 +132,14 @@ def eater_custom_date(request, user_email):
 def delete_food_record(request, user_email):
     logger.info("Deleting food entry", extra={"user_email": user_email})
     try:
-        return delete_food(request=request, user_email=user_email)
+        result = delete_food(request=request, user_email=user_email)
+        if isinstance(result, tuple) and result[1] == 200:
+            threading.Thread(
+                target=_generate_and_cache_recommendation_background,
+                args=(user_email,),
+                daemon=True,
+            ).start()
+        return result
     except Exception:
         logger.exception("Failed to delete food entry for user %s", user_email)
         return "Failed"
@@ -141,7 +148,14 @@ def delete_food_record(request, user_email):
 def modify_food_record_data(request, user_email):
     logger.info("Updating food record", extra={"user_email": user_email})
     try:
-        return modify_food_record(request=request, user_email=user_email)
+        result = modify_food_record(request=request, user_email=user_email)
+        if isinstance(result, tuple) and result[1] == 200:
+            threading.Thread(
+                target=_generate_and_cache_recommendation_background,
+                args=(user_email,),
+                daemon=True,
+            ).start()
+        return result
     except Exception:
         logger.exception("Failed to update food record for user %s", user_email)
         return "Failed"
@@ -158,7 +172,11 @@ def modify_food_manual_data(request, user_email):
             is_success = True
             
         if is_success:
-            invalidate_recommendation_cache(user_email)
+            threading.Thread(
+                target=_generate_and_cache_recommendation_background,
+                args=(user_email,),
+                daemon=True,
+            ).start()
             
         return result
     except Exception:

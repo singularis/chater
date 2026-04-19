@@ -84,6 +84,14 @@ def _generate_and_cache_recommendation_background(user_email: str):
     This runs after successful photo processing so recommendation is ready instantly.
     """
 
+    cooldown_key = f"{KEY_PREFIX}recommendation_bg_cooldown:{user_email}"
+    if redis_client.get(cooldown_key):
+        logger.info("Skipping background recommendation for %s due to cooldown", user_email)
+        return
+    
+    # 5-minute cooldown to save GPT requests and protect against multiple fast triggers
+    redis_client.setex(cooldown_key, 300, "1")
+
     local_model_service = LocalModelService()
 
     try:
