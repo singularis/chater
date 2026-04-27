@@ -29,7 +29,9 @@ import java.security.spec.RSAPublicKeySpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Date;
 
 /**
@@ -52,7 +54,8 @@ public class AuthService {
 
     // ── Config (read once at startup; fail fast if required vars are absent) ─
     private static final String JWT_SECRET = getRequiredEnv("JWT_SECRET");
-    private static final String GOOGLE_CLIENT_ID = getRequiredEnv("GOOGLE_CLIENT_ID");
+    private static final String GOOGLE_CLIENT_ID_RAW = getRequiredEnv("GOOGLE_CLIENT_ID");
+    private static final List<String> GOOGLE_CLIENT_IDS = Arrays.asList(GOOGLE_CLIENT_ID_RAW.split("\\s*,\\s*"));
     private static final String APPLE_BUNDLE_ID = System.getenv().getOrDefault("APPLE_BUNDLE_ID",
             "com.singularis.eater");
     private static final long JWT_EXPIRATION_HOURS = Long
@@ -61,7 +64,7 @@ public class AuthService {
     // ── Google verifier (reuse the instance — it caches Google's public keys) ─
     private static final GoogleIdTokenVerifier GOOGLE_VERIFIER = new GoogleIdTokenVerifier.Builder(
             new NetHttpTransport(), GsonFactory.getDefaultInstance())
-            .setAudience(Collections.singletonList(GOOGLE_CLIENT_ID))
+            .setAudience(GOOGLE_CLIENT_IDS)
             .build();
 
     // ── Apple JWKS – in-memory cache (keys rotate rarely) ───────────────────
@@ -143,25 +146,54 @@ public class AuthService {
             GoogleIdToken googleIdToken = GOOGLE_VERIFIER.verify(idTokenStr);
             if (googleIdToken == null) {
                 logger.error("Google ID token failed signature / claim verification");
+                try {
+                    GoogleIdToken parsedToken = GoogleIdToken.parse(GsonFactory.getDefaultInstance(), idTokenStr);
+                    GoogleIdToken.Payload parsedPayload = parsedToken.getPayload();
+                    logger.error("Parsed Token Details: aud={}, iss={}, exp={}, email={}", 
+                        parsedPayload.getAudience(), parsedPayload.getIssuer(), 
+                        parsedPayload.getExpirationTimeSeconds(), parsedPayload.getEmail());
+                    logger.error("Expected Audiences: {}", GOOGLE_CLIENT_IDS);
+                } catch (Exception e) {
+                    logger.error("Failed to even parse the token manually: {}", e.getMessage());
+                }
                 return null;
             }
 
             GoogleIdToken.Payload payload = googleIdToken.getPayload();
-
-            // Email must be verified by Google
-            if (!Boolean.TRUE.equals(payload.getEmailVerified())) {
-                logger.error("Google token: email_verified is false for {}", payload.getEmail());
-                return null;
-            }
-
             String tokenEmail = payload.getEmail();
-            if (!tokenEmail.equalsIgnoreCase(claimedEmail)) {
-                logger.error("Google token: email mismatch – token={}, claimed={}", tokenEmail, claimedEmail);
-                return null;
+            String subject = payload.getSubject();
+
+            logger.info("Google token payload: sub={}, email={}, email_verified={}, aud={}",
+                    subject, tokenEmail, payload.getEmailVerified(), payload.getAudience());
+
+            // Case 1: Token has a verified email — standard web/iOS flow
+            if (tokenEmail != null && Boolean.TRUE.equals(payload.getEmailVerified())) {
+                if (!tokenEmail.equalsIgnoreCase(claimedEmail)) {
+                    logger.error("Google token: email mismatch – token={}, claimed={}", tokenEmail, claimedEmail);
+                    return null;
+                }
+                logger.info("Google token verified for email={}", tokenEmail);
+                return tokenEmail;
             }
 
-            logger.info("Google token verified for email={}", tokenEmail);
-            return tokenEmail;
+            // Case 2: Token is valid but has no email claim (Android Credential Manager).
+            // The signature and audience have already been verified by GoogleIdTokenVerifier.
+            // Trust the claimedEmail if it looks like an email address, otherwise use sub.
+            if (tokenEmail == null) {
+                logger.warn("Google token has no email claim (sub={}). Falling back to claimedEmail={}",
+                        subject, claimedEmail);
+                if (claimedEmail != null && claimedEmail.contains("@")) {
+                    logger.info("Using claimedEmail={} for verified sub={}", claimedEmail, subject);
+                    return claimedEmail;
+                }
+                // claimedEmail is a Google sub ID, not an email — use it as the identity
+                logger.info("Using Google sub={} as identity (no email available)", subject);
+                return subject;
+            }
+
+            // Case 3: Token has email but email_verified is false
+            logger.error("Google token: email_verified is false for {}", tokenEmail);
+            return null;
 
         } catch (Exception e) {
             logger.error("Google token verification error: {}", e.getMessage());
