@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chater-auth
+  labels:
+    app: chater-auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chater-auth
+  template:
+    metadata:
+      labels:
+        app: chater-auth
+      annotations:
+        co.elastic.logs/enabled: "true"
+    spec:
+      containers:
+        - name: chater-auth
+          image: docker.io/singularis314/chater-auth:latest
+          imagePullPolicy: Always
+          env:
+            - name: IS_DEV
+              value: "false"
+            # ── JWT signing secret (server-side only, never in client) ──
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chater-auth-secrets
+                  key: JWT_SECRET
+            # ── Google OAuth ──
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: chater-auth-secrets
+                  key: GOOGLE_CLIENT_ID
+            # ── Apple OAuth ──
+            - name: APPLE_BUNDLE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: chater-auth-secrets
+                  key: APPLE_BUNDLE_ID
+            # ── Token lifetime ──
+            - name: JWT_EXPIRATION_HOURS
+              value: "24"
+            # ── Infrastructure ──
+            - name: BOOTSTRAP_SERVERS
+              value: "kafka.default.svc.cluster.local:9092"
+            - name: LOG_LEVEL
+              value: "INFO"
