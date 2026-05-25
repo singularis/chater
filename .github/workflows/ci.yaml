@@ -146,8 +146,13 @@ jobs:
     needs: [changes, build]
     if: ${{ always() && !failure() && !cancelled() && needs.changes.outputs.any_changed == 'true' }}
     runs-on: [self-hosted, linux, x64]
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Kustomize
         run: |
