@@ -152,7 +152,9 @@ jobs:
       - name: Install Kustomize
         run: |
           curl -sL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-          sudo mv kustomize /usr/local/bin/
+          mkdir -p $HOME/bin
+          mv kustomize $HOME/bin/
+          echo "$HOME/bin" >> $GITHUB_PATH
 
       - name: Update Kustomize Image Tags & Commit
         run: |
