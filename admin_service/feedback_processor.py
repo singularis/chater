@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 def process_feedback_messages():
     """Main processor to consume feedback messages and write to database."""
     logger.info("Starting feedback processor")
+    logger.info("Testing GitOps deployment!")
 
     try:
         create_feedback_table()
