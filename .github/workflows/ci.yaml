@@ -1,0 +1,186 @@
+name: CI/CD Pipeline (Monorepo)
+
+on:
+  pull_request:
+    branches: [ "master", "main" ]
+  push:
+    branches: [ "master", "main" ]
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Detect which service folders changed
+  # ──────────────────────────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set-matrix.outputs.services }}
+      any_changed: ${{ steps.set-matrix.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            admin_service:
+              - 'admin_service/**'
+            chater_auth:
+              - 'chater_auth/**'
+            chater_dlp:
+              - 'chater_dlp/**'
+            chater_gemini:
+              - 'chater_gemini/**'
+            chater_gpt:
+              - 'chater_gpt/**'
+            chater_ui:
+              - 'chater_ui/**'
+            chater-vision:
+              - 'chater-vision/**'
+            eater:
+              - 'eater/**'
+            eater_init:
+              - 'eater_init/**'
+            eater_user:
+              - 'eater_user/**'
+            load_test:
+              - 'load_test/**'
+            models_processor:
+              - 'models_processor/**'
+
+      # Build a dynamic JSON array of only the services that changed
+      - name: Build service matrix
+        id: set-matrix
+        run: |
+          SERVICES=()
+          for svc in admin_service chater_auth chater_dlp chater_gemini chater_gpt chater_ui chater-vision eater eater_init eater_user load_test models_processor; do
+            # Read the output from paths-filter for each service
+            CHANGED=$(echo '${{ toJSON(steps.filter.outputs) }}' | jq -r ".\"${svc}\"")
+            if [ "$CHANGED" == "true" ]; then
+              SERVICES+=("\"${svc}\"")
+            fi
+          done
+
+          if [ ${#SERVICES[@]} -eq 0 ]; then
+            echo "services=[]" >> $GITHUB_OUTPUT
+            echo "any_changed=false" >> $GITHUB_OUTPUT
+          else
+            JSON="[$(IFS=,; echo "${SERVICES[*]}")]"
+            echo "services=${JSON}" >> $GITHUB_OUTPUT
+            echo "any_changed=true" >> $GITHUB_OUTPUT
+          fi
+          echo "Changed services: ${SERVICES[*]:-none}"
+
+  # ──────────────────────────────────────────────
+  # 2. Build & Push (runs in parallel per service)
+  # ──────────────────────────────────────────────
+  build:
+    needs: changes
+    if: ${{ needs.changes.outputs.any_changed == 'true' }}
+    runs-on: [self-hosted, linux, x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Image Tags
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "TAG=dev-${SHORT_SHA}" >> $GITHUB_ENV
+            echo "ENV_LATEST=dev-latest" >> $GITHUB_ENV
+            echo "TAG_PREFIX=dev-" >> $GITHUB_ENV
+            echo "KEEP_COUNT=2" >> $GITHUB_ENV
+          else
+            echo "TAG=master-${SHORT_SHA}" >> $GITHUB_ENV
+            echo "ENV_LATEST=master-latest" >> $GITHUB_ENV
+            echo "TAG_PREFIX=master-" >> $GITHUB_ENV
+            echo "KEEP_COUNT=3" >> $GITHUB_ENV
+          fi
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push
+        run: |
+          IMAGE=${{ env.DOCKERHUB_USERNAME }}/${{ matrix.service }}
+          docker build \
+            -t ${IMAGE}:${{ env.TAG }} \
+            -t ${IMAGE}:${{ env.ENV_LATEST }} \
+            ./${{ matrix.service }}
+          docker push ${IMAGE}:${{ env.TAG }}
+          docker push ${IMAGE}:${{ env.ENV_LATEST }}
+
+      - name: Cleanup Old Tags (Retention Policy)
+        run: |
+          REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}"
+          PREFIX="${{ env.TAG_PREFIX }}"
+          KEEP=${{ env.KEEP_COUNT }}
+
+          TOKEN=$(curl -s -H "Content-Type: application/json" \
+            -X POST -d '{"username":"${{ secrets.DOCKERHUB_USERNAME }}","password":"${{ secrets.DOCKERHUB_TOKEN }}"}' \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+
+          TAGS=$(curl -s -H "Authorization: JWT ${TOKEN}" \
+            "https://hub.docker.com/v2/repositories/${REPO}/tags/?page_size=100&ordering=-last_updated" \
+            | jq -r '.results[].name' | grep "^${PREFIX}" | grep -v "${PREFIX}latest")
+
+          echo "$TAGS" | tail -n +$((KEEP + 1)) | while read -r tag; do
+            [ -z "$tag" ] && continue
+            echo "Deleting old tag: $tag"
+            curl -s -X DELETE -H "Authorization: JWT ${TOKEN}" \
+              "https://hub.docker.com/v2/repositories/${REPO}/tags/${tag}/"
+          done
+
+  # ──────────────────────────────────────────────
+  # 3. Deploy to Dev via ArgoCD (after all builds)
+  # ──────────────────────────────────────────────
+  deploy-dev:
+    needs: [changes, build]
+    if: ${{ always() && !failure() && !cancelled() && needs.changes.outputs.any_changed == 'true' }}
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update Kustomize Image Tags & Commit
+        run: |
+          # Configure Git
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          
+          # We only deploy dev tags automatically from PRs
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          TAG="dev-${SHORT_SHA}"
+          
+          SERVICES='${{ needs.changes.outputs.services }}'
+          
+          # Parse the JSON array of changed services
+          for svc in $(echo "${SERVICES}" | jq -r '.[]'); do
+            if [ -d "${svc}/k8s/overlays/dev" ]; then
+              echo "Updating image tag for ${svc} to ${TAG}..."
+              cd "${svc}/k8s/overlays/dev"
+              
+              # Use kustomize to update the tag
+              kustomize edit set image "docker.io/singularis314/${svc}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}"
+              
+              cd - # Go back to root
+              git add "${svc}/k8s/overlays/dev/kustomization.yaml"
+            else
+              echo "Warning: No Kustomize overlay found at ${svc}/k8s/overlays/dev. Skipping."
+            fi
+          done
+          
+          # Commit and Push if there are changes
+          if git diff --staged --quiet; then
+            echo "No Kustomize changes to commit."
+          else
+            git commit -m "chore(gitops): update image tags to ${TAG} [skip ci]"
+            # Push changes using the GITHUB_TOKEN
+            git push origin HEAD:${{ github.head_ref }}
+          fi

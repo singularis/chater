@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: eater-dev
+nameSuffix: -dev
+
+images:
+  - name: ghcr.io/open-webui/mcpo
+    newName: ghcr.io/open-webui/mcpo
+    newTag: main
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "true"
+    target:
+      kind: Deployment
+      name: mcpo-postgres
+  - patch: |-
+      - op: add
+        path: /spec/loadBalancerIP
+        value: "192.168.0.120"
+    target:
+      kind: Service
+      name: mcpo-postgres

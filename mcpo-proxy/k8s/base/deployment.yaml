@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcpo-postgres
+  labels:
+    app: mcpo-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcpo-postgres
+  template:
+    metadata:
+      labels:
+        app: mcpo-postgres
+      annotations:
+        co.elastic.logs/enabled: "false"
+    spec:
+      containers:
+        - name: mcpo-postgres
+          image: ghcr.io/open-webui/mcpo:main
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              mcpo --host 0.0.0.0 --port 8001 --config /etc/mcpo/config.json --hot-reload
+          ports:
+            - containerPort: 8001
+              name: http
+          env:
+            - name: IS_DEV
+              value: "false"
+          volumeMounts:
+            - name: mcpo-config
+              mountPath: /etc/mcpo
+      volumes:
+        - name: mcpo-config
+          configMap:
+            name: mcpo-config
+            items:
+              - key: config.json
+                path: config.json

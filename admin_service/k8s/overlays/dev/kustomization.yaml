@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: eater-dev
+nameSuffix: -dev
+
+images:
+  - name: docker.io/singularis314/admin-service
+    newName: docker.io/singularis314/admin_service
+    newTag: dev-latest
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "true"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/2/value
+        value: "eater_dev"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/3/valueFrom/secretKeyRef/name
+        value: "eater-dev.eater-db-dev.credentials.postgresql.acid.zalan.do"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/4/value
+        value: "eater_dev"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/5/value
+        value: "eater-db-dev.eater-dev.svc.cluster.local"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/7/value
+        value: "DEBUG"
+    target:
+      kind: Deployment
+      name: admin-service
+  - patch: |-
+      - op: add
+        path: /spec/loadBalancerIP
+        value: "192.168.0.116"
+    target:
+      kind: Service
+      name: admin-service

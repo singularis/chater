@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcpo-config
+data:
+  config.json: |-
+    {
+      "mcpServers": {
+        "postgres-eater-dev": {
+          "type": "sse",
+          "url": "http://eater-postgres-mcp-dev/sse"
+        }
+      }
+    }

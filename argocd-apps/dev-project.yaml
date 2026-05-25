@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: dev-project
+  namespace: argocd
+spec:
+  description: Development environments for PR deployments
+
+  # Scope deployments to only your application namespaces
+  destinations:
+  - namespace: chater
+    server: https://kubernetes.default.svc
+  - namespace: eater
+    server: https://kubernetes.default.svc
+
+  # TODO: Replace with your actual GitHub repository URL
+  sourceRepos:
+  - 'https://github.com/<your-org>/chater.git'
+
+  # Only allow namespace-level resources (no cluster-wide changes from PRs)
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace

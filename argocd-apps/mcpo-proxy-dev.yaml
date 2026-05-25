@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mcpo-postgres-dev
+  namespace: argocd
+spec:
+  project: dev-project
+  source:
+    repoURL: 'https://github.com/singularis/chater.git'
+    targetRevision: HEAD
+    path: mcpo-proxy/k8s/overlays/dev
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: eater-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

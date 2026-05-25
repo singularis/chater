@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-service
+  labels:
+    app: admin-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-service
+  template:
+    metadata:
+      labels:
+        app: admin-service
+      annotations:
+        co.elastic.logs/enabled: "true"
+    spec:
+      containers:
+        - name: admin-service
+          image: docker.io/singularis314/admin-service:latest
+          imagePullPolicy: Always
+          env:
+            - name: IS_DEV
+              value: "false"
+            - name: BOOTSTRAP_SERVER
+              value: "kafka-kafka-external-bootstrap.kafka-new.svc.cluster.local:9094"
+            - name: POSTGRES_USER
+              value: "eater"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "eater-db.credentials.postgresql.acid.zalan.do"
+                  key: password
+            - name: POSTGRES_DB
+              value: "eater"
+            - name: POSTGRES_HOST
+              value: "eater-db.eater.svc.cluster.local"
+            - name: TEST_USER_EMAIL
+              value: "danteiva3141@gmail.com"
+            - name: LOG_LEVEL
+              value: "ERROR"
