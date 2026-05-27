@@ -176,11 +176,13 @@ jobs:
             TAG="master-${SHORT_SHA}"
           fi
           
-          # Fetch the env/dev branch if it exists, otherwise create it locally based on CURRENT_SHA
-          git fetch origin env/dev:env/dev || git branch env/dev ${CURRENT_SHA}
-          
-          # Checkout the env/dev branch
-          git checkout env/dev
+          # Fetch the env/dev branch if it exists, otherwise create it locally
+          if git ls-remote --exit-code --heads origin env/dev; then
+            git fetch origin env/dev:env/dev
+            git checkout env/dev
+          else
+            git checkout -b env/dev
+          fi
           
           # Ensure structural manifests from the current push are copied over to env/dev
           git checkout ${CURRENT_SHA} -- */k8s/ argocd-apps/ || true
@@ -247,10 +249,12 @@ jobs:
           TAG="master-${SHORT_SHA}"
           
           # Fetch the env/prod branch if it exists, otherwise create it locally
-          git fetch origin env/prod:env/prod || git branch env/prod ${CURRENT_SHA}
-          
-          # Checkout the env/prod branch
-          git checkout env/prod
+          if git ls-remote --exit-code --heads origin env/prod; then
+            git fetch origin env/prod:env/prod
+            git checkout env/prod
+          else
+            git checkout -b env/prod
+          fi
           
           # Ensure structural manifests from the current push are copied over
           git checkout ${CURRENT_SHA} -- */k8s/ argocd-apps/ || true
