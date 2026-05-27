@@ -144,7 +144,7 @@ jobs:
   # ──────────────────────────────────────────────
   deploy-dev:
     needs: [changes, build]
-    if: ${{ always() && !failure() && !cancelled() && needs.changes.outputs.any_changed == 'true' }}
+    if: ${{ always() && !failure() && !cancelled() && needs.changes.outputs.any_changed == 'true' && github.event_name == 'pull_request' }}
     runs-on: [self-hosted, linux, x64]
     permissions:
       contents: write
@@ -161,15 +161,29 @@ jobs:
           mv kustomize $HOME/bin/
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Update Kustomize Image Tags & Commit
+      - name: Update Kustomize Image Tags & Push to env/dev
         run: |
           # Configure Git
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           
-          # We only deploy dev tags automatically from PRs
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          TAG="dev-${SHORT_SHA}"
+          CURRENT_SHA="${{ github.sha }}"
+          SHORT_SHA=$(echo "${CURRENT_SHA}" | cut -c1-7)
+          
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            TAG="dev-${SHORT_SHA}"
+          else
+            TAG="master-${SHORT_SHA}"
+          fi
+          
+          # Fetch the env/dev branch if it exists, otherwise create it locally based on CURRENT_SHA
+          git fetch origin env/dev:env/dev || git branch env/dev ${CURRENT_SHA}
+          
+          # Checkout the env/dev branch
+          git checkout env/dev
+          
+          # Ensure structural manifests from the current push are copied over to env/dev
+          git checkout ${CURRENT_SHA} -- */k8s/ argocd-apps/ || true
           
           SERVICES='${{ needs.changes.outputs.services }}'
           
@@ -183,17 +197,84 @@ jobs:
               kustomize edit set image "docker.io/singularis314/${svc}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}"
               
               cd - # Go back to root
-              git add "${svc}/k8s/overlays/dev/kustomization.yaml"
             else
               echo "Warning: No Kustomize overlay found at ${svc}/k8s/overlays/dev. Skipping."
             fi
           done
           
+          # Add all k8s and argocd-apps structural files to git
+          git add */k8s/ argocd-apps/ || true
+          
           # Commit and Push if there are changes
           if git diff --staged --quiet; then
-            echo "No Kustomize changes to commit."
+            echo "No GitOps changes to commit."
           else
-            git commit -m "chore(gitops): update image tags to ${TAG} [skip ci]"
-            # Push changes using the GITHUB_TOKEN
-            git push origin HEAD:${{ github.head_ref }}
+            git commit -m "chore(gitops): deploy to dev via ${TAG} [skip ci]"
+            # Push to the env/dev branch
+            git push -u origin env/dev
+          fi
+
+  # ──────────────────────────────────────────────
+  # 4. Deploy to Prod via ArgoCD (master only)
+  # ──────────────────────────────────────────────
+  deploy-prod:
+    needs: [changes, build]
+    if: ${{ always() && !failure() && !cancelled() && needs.changes.outputs.any_changed == 'true' && github.event_name == 'push' }}
+    runs-on: [self-hosted, linux, x64]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Kustomize
+        run: |
+          curl -sL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          mkdir -p $HOME/bin
+          mv kustomize $HOME/bin/
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Update Kustomize Image Tags & Push to env/prod
+        run: |
+          # Configure Git
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          
+          CURRENT_SHA="${{ github.sha }}"
+          SHORT_SHA=$(echo "${CURRENT_SHA}" | cut -c1-7)
+          TAG="master-${SHORT_SHA}"
+          
+          # Fetch the env/prod branch if it exists, otherwise create it locally
+          git fetch origin env/prod:env/prod || git branch env/prod ${CURRENT_SHA}
+          
+          # Checkout the env/prod branch
+          git checkout env/prod
+          
+          # Ensure structural manifests from the current push are copied over
+          git checkout ${CURRENT_SHA} -- */k8s/ argocd-apps/ || true
+          
+          SERVICES='${{ needs.changes.outputs.services }}'
+          
+          for svc in $(echo "${SERVICES}" | jq -r '.[]'); do
+            if [ -d "${svc}/k8s/overlays/prod" ]; then
+              echo "Updating prod image tag for ${svc} to ${TAG}..."
+              cd "${svc}/k8s/overlays/prod"
+              
+              kustomize edit set image "docker.io/singularis314/${svc}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}"
+              
+              cd - # Go back to root
+            else
+              echo "Warning: No Kustomize overlay found at ${svc}/k8s/overlays/prod. Skipping."
+            fi
+          done
+          
+          git add */k8s/ argocd-apps/ || true
+          
+          if git diff --staged --quiet; then
+            echo "No GitOps changes to commit."
+          else
+            git commit -m "chore(gitops): deploy to prod via ${TAG} [skip ci]"
+            git push -u origin env/prod
           fi
