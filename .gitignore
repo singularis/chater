@@ -54,7 +54,6 @@ inventory
 _duplicates/
 
 ### Documentation ###
-docs/
 QUICK_FIX_*.sh
 
 ### Protobuf Generated Files ###
