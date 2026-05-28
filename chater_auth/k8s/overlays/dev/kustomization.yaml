@@ -13,7 +13,7 @@ images:
   newTag: dev-latest
 - name: docker.io/singularis314/chater_auth
   newName: docker.io/singularis314/chater_auth
-  newTag: dev-6044b7d
+  newTag: dev-0d0087d
 
 patches:
 - patch: |-
