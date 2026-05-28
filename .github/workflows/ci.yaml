@@ -161,6 +161,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Install Kustomize
         run: |
@@ -175,8 +176,8 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           
-          CURRENT_SHA="${{ github.sha }}"
-          SHORT_SHA=$(echo "${CURRENT_SHA}" | cut -c1-7)
+          PR_BRANCH="${{ github.head_ref }}"
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
           
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             TAG="dev-${SHORT_SHA}"
@@ -184,7 +185,7 @@ jobs:
             TAG="master-${SHORT_SHA}"
           fi
           
-          # Fetch the env/dev branch if it exists, otherwise create it locally
+          # Fetch the env/dev branch if it exists, otherwise create it from the PR branch
           if git ls-remote --exit-code --heads origin env/dev; then
             git fetch origin env/dev:env/dev
             git checkout env/dev
@@ -192,8 +193,8 @@ jobs:
             git checkout -b env/dev
           fi
           
-          # Ensure structural manifests from the current push are copied over to env/dev
-          git checkout ${CURRENT_SHA} -- */k8s/ argocd-apps/ || true
+          # Copy the latest k8s manifests and argocd-apps from the PR branch
+          git checkout "origin/${PR_BRANCH}" -- */k8s/ argocd-apps/ || true
           
           SERVICES='${{ needs.changes.outputs.services }}'
           
@@ -239,8 +240,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref || github.ref }}
+          ref: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Install Kustomize
         run: |
@@ -255,8 +257,7 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           
-          CURRENT_SHA="${{ github.sha }}"
-          SHORT_SHA=$(echo "${CURRENT_SHA}" | cut -c1-7)
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
           TAG="master-${SHORT_SHA}"
           
           # Fetch the env/prod branch if it exists, otherwise create it locally
@@ -267,8 +268,8 @@ jobs:
             git checkout -b env/prod
           fi
           
-          # Ensure structural manifests from the current push are copied over
-          git checkout ${CURRENT_SHA} -- */k8s/ argocd-apps/ || true
+          # Copy the latest k8s manifests and argocd-apps from the main branch
+          git checkout "origin/${{ github.ref_name }}" -- */k8s/ argocd-apps/ || true
           
           SERVICES='${{ needs.changes.outputs.services }}'
           
