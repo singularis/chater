@@ -188,5 +188,5 @@
             name: neo4j-auth-eater
             namespace: eater
           type: Opaque
-          data:
-            NEO4J_PASSWORD: Y250a212Zls=
+          stringData:
+            NEO4J_PASSWORD: "{{ vars.EATER.NEO4J_PASSWORD }}"

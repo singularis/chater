@@ -131,8 +131,8 @@ spec:
   type: LoadBalancer
 ---
 apiVersion: v1
-data:
-  NEO4J_PASSWORD: Y250a212Zls=
+stringData:
+  NEO4J_PASSWORD: '{{ vars.EATER.NEO4J_PASSWORD }}'
 kind: Secret
 metadata:
   name: neo4j-auth-eater
