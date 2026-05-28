@@ -11,9 +11,6 @@ images:
 - name: docker.io/singularis314/admin-service
   newName: docker.io/singularis314/admin_service
   newTag: dev-latest
-- name: docker.io/singularis314/admin_service
-  newName: docker.io/test/admin_service
-  newTag: tag
 
 patches:
 - patch: |-
