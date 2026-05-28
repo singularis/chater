@@ -69,9 +69,6 @@ brew install gh
 gh auth login  # follow the prompts
 ```
 
-### 5. Docker Desktop
-Download from [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) and install.
-
 ---
 
 ## Backend Development
@@ -292,7 +289,7 @@ Work through this list top to bottom. Check each item off as you go.
 - `[ ]` Ran `kubectl logs` on a pod successfully
 - `[ ]` Python + pyenv installed
 - `[ ]` Ran a service locally inside a venv
-- `[ ]` Docker Desktop installed and running
+
 - `[ ]` *(iOS only)* Xcode installed and a Simulator runs
 - `[ ]` *(Android only)* Android Studio installed and an AVD runs
 
