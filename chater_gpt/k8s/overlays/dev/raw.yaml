@@ -1,0 +1,24 @@
+apiVersion: chater.example.com/v1
+kind: ChaterGpt
+metadata:
+  name: chater-gpt-dev-operated
+  namespace: chater-gpt-dev
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/hostname
+            operator: In
+            values:
+            - racoon
+  bootstrapServer: '{{ vars.BOOTSTRAP_SERVER }}'
+  isDev: 'true'
+  logLevel: '{{ vars.LOG_LEVEL }}'
+  model: '{{ vars.MODEL }}'
+  namespace: chater-gpt-dev-operated
+  openAIAPIKey: '{{ vars.CAPI | b64encode }}'
+  replicas: 1
+  secretKey: '{{ vars.SECRET_KEY | b64encode }}'
+  visionModel: '{{ vars.VISION_MODEL }}'

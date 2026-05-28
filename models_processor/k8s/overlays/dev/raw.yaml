@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: models-processor-dev
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: models-processor-dev
+  namespace: models-processor-dev
+spec:
+  ports:
+  - port: 8000
+    protocol: TCP
+    targetPort: 8000
+  selector:
+    app: models-processor-dev
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: models-processor-dev
+  namespace: models-processor-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: models-processor-dev
+  template:
+    metadata:
+      annotations:
+        co.elastic.logs/enabled: 'true'
+      labels:
+        app: models-processor-dev
+    spec:
+      containers:
+      - env:
+        - name: IS_DEV
+          value: 'true'
+        - name: BOOTSTRAP_SERVER
+          value: '{{ vars.BOOTSTRAP_SERVER }}'
+        - name: LOCAL_MODEL_KAFKA_TOPIC
+          value: '{{ vars.MODELS_PROCESSOR.LOCAL_MODEL_KAFKA_TOPIC }}'
+        - name: OLLAMA_HOST
+          value: '{{ vars.MODELS_PROCESSOR.OLLAMA_HOST }}'
+        - name: OLLAMA_MODEL
+          value: '{{ vars.MODELS_PROCESSOR.OLLAMA_MODEL }}'
+        - name: LOG_LEVEL
+          value: '{{ vars.LOG_LEVEL }}'
+        image: docker.io/singularis314/models_processor
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 300
+        name: models-processor-dev
+        ports:
+        - containerPort: 8000
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 15
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi

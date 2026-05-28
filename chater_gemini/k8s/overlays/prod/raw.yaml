@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chater-gemini
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chater-gemini
+  namespace: chater-gemini
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chater-gemini
+  template:
+    metadata:
+      annotations:
+        co.elastic.logs/enabled: 'true'
+      labels:
+        app: chater-gemini
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - racoon
+                - racoon-gpu
+      containers:
+      - env:
+        - name: GOOGLE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: GOOGLE_API_KEY
+              name: chater-gemini
+        - name: BOOTSTRAP_SERVER
+          value: '{{ vars.BOOTSTRAP_SERVER }}'
+        - name: GEMINI_MODEL
+          value: '{{ vars.GEMINI_MODEL }}'
+        - name: GEMINI_THINK_MODEL
+          value: '{{ vars.GEMINI_THINK_MODEL }}'
+        - name: LOG_LEVEL
+          value: '{{ vars.LOG_LEVEL }}'
+        image: docker.io/singularis314/chater_gemini
+        imagePullPolicy: Always
+        name: chater-gemini
+---
+apiVersion: v1
+data:
+  GOOGLE_API_KEY: '{{ vars.GEMINI_API_KEY | b64encode }}'
+kind: Secret
+metadata:
+  name: chater-gemini
+  namespace: chater-gemini

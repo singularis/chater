@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: chater-auth-dev
+  name: chater-dlp-prod
   namespace: argocd
 spec:
   project: dev-project
   source:
     repoURL: 'https://github.com/singularis/chater.git'
-    targetRevision: env/dev
-    path: chater_auth/k8s/overlays/dev
+    targetRevision: env/prod
+    path: chater_dlp/k8s/overlays/prod
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: chater-dev
+    namespace: chater
   syncPolicy:
     automated:
       prune: true
