@@ -118,6 +118,10 @@ jobs:
 
       - name: Build and Push
         run: |
+          if [ ! -f "./${{ matrix.service }}/Dockerfile" ]; then
+            echo "No Dockerfile found in ./${{ matrix.service }}, skipping build."
+            exit 0
+          fi
           IMAGE=${{ env.DOCKERHUB_USERNAME }}/${{ matrix.service }}
           docker build \
             -t ${IMAGE}:${{ env.TAG }} \
@@ -207,8 +211,12 @@ jobs:
               # Use kustomize to update the tag
               # Also handle hyphenated versions of the service name to ensure it matches the raw.yaml
               SVC_HYPHEN=$(echo "${svc}" | tr '_' '-')
-              kustomize edit set image "docker.io/singularis314/${svc}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
-              kustomize edit set image "docker.io/singularis314/${SVC_HYPHEN}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
+              if grep -q "name: docker.io/singularis314/${svc}" kustomization.yaml; then
+                kustomize edit set image "docker.io/singularis314/${svc}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
+              fi
+              if grep -q "name: docker.io/singularis314/${SVC_HYPHEN}" kustomization.yaml; then
+                kustomize edit set image "docker.io/singularis314/${SVC_HYPHEN}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
+              fi
               
               cd - # Go back to root
             else
@@ -279,8 +287,12 @@ jobs:
               cd "${svc}/k8s/overlays/prod"
               
               SVC_HYPHEN=$(echo "${svc}" | tr '_' '-')
-              kustomize edit set image "docker.io/singularis314/${svc}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
-              kustomize edit set image "docker.io/singularis314/${SVC_HYPHEN}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
+              if grep -q "name: docker.io/singularis314/${svc}" kustomization.yaml; then
+                kustomize edit set image "docker.io/singularis314/${svc}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
+              fi
+              if grep -q "name: docker.io/singularis314/${SVC_HYPHEN}" kustomization.yaml; then
+                kustomize edit set image "docker.io/singularis314/${SVC_HYPHEN}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
+              fi
               
               cd - # Go back to root
             else

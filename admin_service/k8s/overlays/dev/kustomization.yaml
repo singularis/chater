@@ -10,7 +10,10 @@ nameSuffix: -dev
 images:
 - name: docker.io/singularis314/admin-service
   newName: docker.io/singularis314/admin_service
-  newTag: dev-latest
+  newTag: dev-bc988e6
+- name: docker.io/singularis314/admin_service
+  newName: docker.io/singularis314/admin_service
+  newTag: dev-bc988e6
 
 patches:
 - patch: |-
