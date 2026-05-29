@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chater-ui
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chater-ui
+  namespace: chater-ui
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chater-ui
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        co.elastic.logs/enabled: 'true'
+      labels:
+        app: chater-ui
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - racoon
+                - racoon-gpu
+      containers:
+      - env:
+        - name: USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: USERNAME
+              name: chater-ui
+        - name: PASSWORD_HASH
+          valueFrom:
+            secretKeyRef:
+              key: PASSWORD_HASH
+              name: chater-ui
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              key: SECRET_KEY
+              name: chater-ui
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /var/secrets/google/service-account.json
+        - name: SESSION_LIFETIME
+          value: '{{ vars.SESSION_LIFETIME }}'
+        - name: GCP_PROJECT_ID
+          value: '{{ vars.GCP_PROJECT_ID }}'
+        - name: BOOTSTRAP_SERVER
+          value: '{{ vars.BOOTSTRAP_SERVER }}'
+        - name: GOOGLE_OAUTH_CLIENT_ID
+          value: '{{ vars.GOOGLE_OAUTH_CLIENT_ID }}'
+        - name: GOOGLE_OAUTH_CLIENT_SECRET
+          value: '{{ vars.GOOGLE_OAUTH_CLIENT_SECRET }}'
+        - name: ALLOWED_EMAILS
+          value: '{{ vars.ALLOWED_EMAILS }}'
+        - name: JWT_SECRET
+          value: '{{ vars.JWT_SECRET }}'
+        - name: REDIS_ENDPOINT
+          value: '{{ vars.REDIS_ENDPOINT }}'
+        - name: DAILY_REQUEST_LIMIT
+          value: '30'
+        - name: MINIO_ENDPOINT
+          value: http://{{ vars.minio.loadBalancerIP }}:9000
+        - name: MINIO_ACCESS_KEY
+          value: '{{ vars.minio.root_user }}'
+        - name: MINIO_SECRET_KEY
+          value: '{{ vars.minio.root_password }}'
+        - name: MINIO_BUCKET_EATER
+          value: eater
+        - name: MINIO_BUCKET_GPHOTO
+          value: gphoto
+        - name: MINIO_SECURE
+          value: 'false'
+        - name: POSTGRES_USER
+          value: '{{ vars.EATER.DB_NAME }}'
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: '{{ vars.EATER.DB_PASSWORD }}'
+        - name: POSTGRES_DB
+          value: '{{ vars.EATER.DB_NAME }}'
+        - name: POSTGRES_HOST
+          value: '{{ vars.EATER.POSTGRES_HOST }}'
+        - name: TEST_USER_EMAIL
+          value: '{{ vars.TEST_USER_EMAIL }}'
+        - name: LOCAL_MODEL_SERVICE_URL
+          value: '{{ vars.MODELS_PROCESSOR.LOCAL_MODEL_SERVICE_URL }}'
+        - name: LOCAL_MODEL_KAFKA_TOPIC
+          value: '{{ vars.MODELS_PROCESSOR.LOCAL_MODEL_KAFKA_TOPIC }}'
+        - name: DEFAULT_MODEL_TIER
+          value: '{{ vars.MODELS_PROCESSOR.DEFAULT_MODEL_TIER }}'
+        - name: LOG_LEVEL
+          value: '{{ vars.LOG_LEVEL }}'
+        image: docker.io/singularis314/chater_ui
+        imagePullPolicy: IfNotPresent
+        name: chater-ui
+        ports:
+        - containerPort: 5000
+          name: chater-ui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: chater-ui
+  name: chater-ui
+  namespace: chater-ui
+spec:
+  ports:
+  - name: http
+    nodePort: 30600
+    port: 5000
+    targetPort: 5000
+  selector:
+    app: chater-ui
+  type: NodePort
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: chater-ui-pdb
+  namespace: chater-ui
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: chater-ui
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app: gphoto-flask-prometheus
+  name: chater-ui-monitor
+  namespace: monitoring
+spec:
+  endpoints:
+  - interval: 30s
+    path: /metrics
+    port: http
+    scheme: http
+  jobLabel: app
+  namespaceSelector:
+    matchNames:
+    - chater-ui
+  selector:
+    matchLabels:
+      app: chater-ui
+---
+apiVersion: v1
+data:
+  PASSWORD_HASH: '{{ vars.PASSWORD | b64encode }}'
+  SECRET_KEY: '{{ vars.SECRET_KEY | b64encode }}'
+  USERNAME: '{{ vars.USER | b64encode }}'
+kind: Secret
+metadata:
+  name: chater-ui
+  namespace: chater-ui

@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: eater
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eater-postgres-mcp
+  namespace: eater
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eater-postgres-mcp
+  template:
+    metadata:
+      annotations:
+        co.elastic.logs/enabled: 'false'
+      labels:
+        app: eater-postgres-mcp
+    spec:
+      containers:
+      - args:
+        - --access-mode=restricted
+        - --transport=sse
+        - --sse-host=0.0.0.0
+        env:
+        - name: PGHOST
+          value: '{{ vars.EATER.POSTGRES_HOST }}'
+        - name: PGDATABASE
+          value: '{{ vars.EATER.DB_NAME }}'
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: '{{ vars.EATER.DB_PASSWORD }}'
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: '{{ vars.EATER.DB_PASSWORD }}'
+        - name: DATABASE_URI
+          value: postgresql://$(PGUSER):$(PGPASSWORD)@$(PGHOST):5432/$(PGDATABASE)
+        image: docker.io/crystaldba/postgres-mcp:latest
+        name: eater-postgres-mcp
+        ports:
+        - containerPort: 8000
+          name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eater-postgres-mcp
+  namespace: eater
+spec:
+  loadBalancerIP: '{{ vars.MCP_POSTGRES_LB_IP | default('''') }}'
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: http
+  selector:
+    app: eater-postgres-mcp
+  sessionAffinity: ClientIP
+  type: LoadBalancer

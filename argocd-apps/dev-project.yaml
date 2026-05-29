@@ -12,10 +12,13 @@ spec:
     server: https://kubernetes.default.svc
   - namespace: eater
     server: https://kubernetes.default.svc
+  - namespace: chater-dev
+    server: https://kubernetes.default.svc
+  - namespace: eater-dev
+    server: https://kubernetes.default.svc
 
-  # TODO: Replace with your actual GitHub repository URL
   sourceRepos:
-  - 'https://github.com/<your-org>/chater.git'
+  - 'https://github.com/singularis/chater.git'
 
   # Only allow namespace-level resources (no cluster-wide changes from PRs)
   clusterResourceWhitelist:

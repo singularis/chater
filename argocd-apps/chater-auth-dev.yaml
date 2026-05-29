@@ -7,11 +7,11 @@ spec:
   project: dev-project
   source:
     repoURL: 'https://github.com/singularis/chater.git'
-    targetRevision: HEAD
+    targetRevision: env/dev
     path: chater_auth/k8s/overlays/dev
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: chater-auth-dev
+    namespace: chater-dev
   syncPolicy:
     automated:
       prune: true

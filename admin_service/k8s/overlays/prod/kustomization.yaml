@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../../base
+
+namespace: eater
+
+images:
+- name: docker.io/singularis314/admin-service
+  newName: docker.io/singularis314/admin_service
+  newTag: master-bc988e6
+- name: docker.io/singularis314/admin_service
+  newName: docker.io/singularis314/admin_service
+  newTag: master-bc988e6
+
+replicas:
+- count: 2
+  name: admin-service
+
+patches:
+- patch: |-
+    - op: add
+      path: /spec/template/spec/affinity
+      value:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - racoon
+                      - racoon-gpu
+  target:
+    kind: Deployment
+    name: admin-service
+- patch: |-
+    - op: add
+      path: /spec/loadBalancerIP
+      value: "192.168.0.113"
+  target:
+    kind: Service
+    name: admin-service

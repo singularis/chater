@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: models-processor-dev
+  namespace: argocd
+spec:
+  project: dev-project
+  source:
+    repoURL: 'https://github.com/singularis/chater.git'
+    targetRevision: env/dev
+    path: models_processor/k8s/overlays/dev
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: eater-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

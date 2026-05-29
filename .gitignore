@@ -54,10 +54,10 @@ inventory
 _duplicates/
 
 ### Documentation ###
-docs/
 QUICK_FIX_*.sh
 
 ### Protobuf Generated Files ###
 *_pb2.py
 *_pb2_grpc.py
 todo.md
+docs

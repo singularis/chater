@@ -25,41 +25,49 @@ jobs:
         id: filter
         with:
           filters: |
-            admin_service:
-              - 'admin_service/**'
-            chater_auth:
-              - 'chater_auth/**'
-            chater_dlp:
-              - 'chater_dlp/**'
-            chater_gemini:
-              - 'chater_gemini/**'
-            chater_gpt:
-              - 'chater_gpt/**'
-            chater_ui:
-              - 'chater_ui/**'
-            chater-vision:
-              - 'chater-vision/**'
-            eater:
-              - 'eater/**'
-            eater_init:
-              - 'eater_init/**'
-            eater_user:
-              - 'eater_user/**'
-            load_test:
-              - 'load_test/**'
-            models_processor:
-              - 'models_processor/**'
+            admin_service: 'admin_service/**'
+            chater_auth: 'chater_auth/**'
+            chater_dlp: 'chater_dlp/**'
+            chater_gemini: 'chater_gemini/**'
+            chater_gpt: 'chater_gpt/**'
+            chater_ui: 'chater_ui/**'
+            chater-vision: 'chater-vision/**'
+            eater: 'eater/**'
+            eater_init: 'eater_init/**'
+            eater_user: 'eater_user/**'
+            load_test: 'load_test/**'
+            models_processor: 'models_processor/**'
+            mcpo-proxy: 'mcpo-proxy/**'
+            chater-gpt-operator: 'chater-operators/chater-gpt-operator/**'
 
       # Build a dynamic JSON array of only the services that changed
       - name: Build service matrix
         id: set-matrix
         run: |
           SERVICES=()
-          for svc in admin_service chater_auth chater_dlp chater_gemini chater_gpt chater_ui chater-vision eater eater_init eater_user load_test models_processor; do
-            # Read the output from paths-filter for each service
-            CHANGED=$(echo '${{ toJSON(steps.filter.outputs) }}' | jq -r ".\"${svc}\"")
+          
+          # We map the paths-filter key to the actual directory path
+          declare -A SVC_MAP=(
+            ["admin_service"]="admin_service"
+            ["chater_auth"]="chater_auth"
+            ["chater_dlp"]="chater_dlp"
+            ["chater_gemini"]="chater_gemini"
+            ["chater_gpt"]="chater_gpt"
+            ["chater_ui"]="chater_ui"
+            ["chater-vision"]="chater-vision"
+            ["eater"]="eater"
+            ["eater_init"]="eater_init"
+            ["eater_user"]="eater_user"
+            ["load_test"]="load_test"
+            ["models_processor"]="models_processor"
+            ["mcpo-proxy"]="mcpo-proxy"
+            ["chater-gpt-operator"]="chater-operators/chater-gpt-operator"
+          )
+          
+          for key in "${!SVC_MAP[@]}"; do
+            CHANGED=$(echo '${{ toJSON(steps.filter.outputs) }}' | jq -r ".\"${key}\"")
             if [ "$CHANGED" == "true" ]; then
-              SERVICES+=("\"${svc}\"")
+              SERVICES+=("\"${SVC_MAP[$key]}\"")
             fi
           done
 
@@ -110,6 +118,10 @@ jobs:
 
       - name: Build and Push
         run: |
+          if [ ! -f "./${{ matrix.service }}/Dockerfile" ]; then
+            echo "No Dockerfile found in ./${{ matrix.service }}, skipping build."
+            exit 0
+          fi
           IMAGE=${{ env.DOCKERHUB_USERNAME }}/${{ matrix.service }}
           docker build \
             -t ${IMAGE}:${{ env.TAG }} \
@@ -144,19 +156,49 @@ jobs:
   # ──────────────────────────────────────────────
   deploy-dev:
     needs: [changes, build]
-    if: ${{ always() && !failure() && !cancelled() && needs.changes.outputs.any_changed == 'true' }}
+    if: ${{ always() && !failure() && !cancelled() && needs.changes.outputs.any_changed == 'true' && github.event_name == 'pull_request' }}
     runs-on: [self-hosted, linux, x64]
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Update Kustomize Image Tags & Commit
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Install Kustomize
+        run: |
+          curl -sL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          mkdir -p $HOME/bin
+          mv kustomize $HOME/bin/
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Update Kustomize Image Tags & Push to env/dev
         run: |
           # Configure Git
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           
-          # We only deploy dev tags automatically from PRs
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          TAG="dev-${SHORT_SHA}"
+          PR_BRANCH="${{ github.head_ref }}"
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            TAG="dev-${SHORT_SHA}"
+          else
+            TAG="master-${SHORT_SHA}"
+          fi
+          
+          # Fetch the env/dev branch if it exists, otherwise create it from the PR branch
+          if git ls-remote --exit-code --heads origin env/dev; then
+            git fetch origin env/dev:env/dev
+            git checkout env/dev
+          else
+            git checkout -b env/dev
+          fi
+          
+          # Copy the latest k8s manifests and argocd-apps from the PR branch
+          git checkout "origin/${PR_BRANCH}" -- */k8s/ argocd-apps/ || true
           
           SERVICES='${{ needs.changes.outputs.services }}'
           
@@ -167,20 +209,102 @@ jobs:
               cd "${svc}/k8s/overlays/dev"
               
               # Use kustomize to update the tag
-              kustomize edit set image "docker.io/singularis314/${svc}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}"
+              # Also handle hyphenated versions of the service name to ensure it matches the raw.yaml
+              SVC_HYPHEN=$(echo "${svc}" | tr '_' '-')
+              if grep -q "name: docker.io/singularis314/${svc}" kustomization.yaml; then
+                kustomize edit set image "docker.io/singularis314/${svc}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
+              fi
+              if grep -q "name: docker.io/singularis314/${SVC_HYPHEN}" kustomization.yaml; then
+                kustomize edit set image "docker.io/singularis314/${SVC_HYPHEN}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
+              fi
               
               cd - # Go back to root
-              git add "${svc}/k8s/overlays/dev/kustomization.yaml"
             else
               echo "Warning: No Kustomize overlay found at ${svc}/k8s/overlays/dev. Skipping."
             fi
           done
           
+          # Add all k8s and argocd-apps structural files to git
+          git add */k8s/ argocd-apps/ || true
+          
           # Commit and Push if there are changes
           if git diff --staged --quiet; then
-            echo "No Kustomize changes to commit."
+            echo "No GitOps changes to commit."
           else
-            git commit -m "chore(gitops): update image tags to ${TAG} [skip ci]"
-            # Push changes using the GITHUB_TOKEN
-            git push origin HEAD:${{ github.head_ref }}
+            git commit -m "chore(gitops): deploy to dev via ${TAG} [skip ci]"
+            # Push to the env/dev branch
+            git push -u origin env/dev
+          fi
+
+  # ──────────────────────────────────────────────
+  # 4. Deploy to Prod via ArgoCD (master only)
+  # ──────────────────────────────────────────────
+  deploy-prod:
+    needs: [changes, build]
+    if: ${{ always() && !failure() && !cancelled() && needs.changes.outputs.any_changed == 'true' && github.event_name == 'push' }}
+    runs-on: [self-hosted, linux, x64]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Install Kustomize
+        run: |
+          curl -sL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          mkdir -p $HOME/bin
+          mv kustomize $HOME/bin/
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Update Kustomize Image Tags & Push to env/prod
+        run: |
+          # Configure Git
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          TAG="master-${SHORT_SHA}"
+          
+          # Fetch the env/prod branch if it exists, otherwise create it locally
+          if git ls-remote --exit-code --heads origin env/prod; then
+            git fetch origin env/prod:env/prod
+            git checkout env/prod
+          else
+            git checkout -b env/prod
+          fi
+          
+          # Copy the latest k8s manifests and argocd-apps from the main branch
+          git checkout "origin/${{ github.ref_name }}" -- */k8s/ argocd-apps/ || true
+          
+          SERVICES='${{ needs.changes.outputs.services }}'
+          
+          for svc in $(echo "${SERVICES}" | jq -r '.[]'); do
+            if [ -d "${svc}/k8s/overlays/prod" ]; then
+              echo "Updating prod image tag for ${svc} to ${TAG}..."
+              cd "${svc}/k8s/overlays/prod"
+              
+              SVC_HYPHEN=$(echo "${svc}" | tr '_' '-')
+              if grep -q "name: docker.io/singularis314/${svc}" kustomization.yaml; then
+                kustomize edit set image "docker.io/singularis314/${svc}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
+              fi
+              if grep -q "name: docker.io/singularis314/${SVC_HYPHEN}" kustomization.yaml; then
+                kustomize edit set image "docker.io/singularis314/${SVC_HYPHEN}=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${svc}:${TAG}" || true
+              fi
+              
+              cd - # Go back to root
+            else
+              echo "Warning: No Kustomize overlay found at ${svc}/k8s/overlays/prod. Skipping."
+            fi
+          done
+          
+          git add */k8s/ argocd-apps/ || true
+          
+          if git diff --staged --quiet; then
+            echo "No GitOps changes to commit."
+          else
+            git commit -m "chore(gitops): deploy to prod via ${TAG} [skip ci]"
+            git push -u origin env/prod
           fi
